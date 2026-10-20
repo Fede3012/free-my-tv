@@ -129,10 +129,15 @@ final class HomeMode {
             busy(c, Ui.tr("Trocando o Início e a tela de descanso…", "Switching the home screen and screensaver…", "Cambiando el Inicio y el protector de pantalla…"));
             check(adb.shell("cmd package set-home-activity " + HOME_ACTIVITY), "Success",
                     Ui.tr("o Android não aceitou o novo Início", "Android didn't accept the new home screen", "Android no aceptó el nuevo Inicio"));
-            adb.shell("settings put secure screensaver_components " + DREAM);
+            useScreensaver(adb);
             List<String> targets = targets(home, dream);
             Set<String> disabled = new HashSet<>(stringList(state(c), "disabled"));
             Set<String> present = packages(adb, "");
+            // screensaver=system: the TV's own screensaver (Google Photos, say) must work, even if an earlier switch turned it off.
+            String dreamPkg = packageOf(dream);
+            if (Config.SYSTEM_SCREENSAVER && dreamPkg != null && !dreamPkg.equals(packageOf(home)) && disabled.remove(dreamPkg)) {
+                adb.shell("pm enable " + dreamPkg);
+            }
             int done = 0;
             for (String pkg : targets) {
                 done++;
@@ -284,8 +289,8 @@ final class HomeMode {
                     adb.shell("cmd package set-home-activity " + HOME_ACTIVITY);
                     fixed.add(Ui.tr("o Início", "the home screen", "el Inicio"));
                 }
-                if (!adb.shell("settings get secure screensaver_components").contains(DREAM)) {
-                    adb.shell("settings put secure screensaver_components " + DREAM);
+                if (Config.SYSTEM_SCREENSAVER != !adb.shell("settings get secure screensaver_components").contains(DREAM)) {
+                    useScreensaver(adb);
                     fixed.add(Ui.tr("a tela de descanso", "the screensaver", "el protector de pantalla"));
                 }
                 JSONObject latest = state(app);
@@ -311,10 +316,18 @@ final class HomeMode {
         if (homePkg != null && !homePkg.equals(PKG)) out.add(homePkg);
         out.add(GOOGLE_SETUP);
         String dreamPkg = packageOf(dream);
-        if (dreamPkg != null && !dreamPkg.equals(PKG) && !dreamPkg.equals(homePkg)) out.add(dreamPkg);
+        if (!Config.SYSTEM_SCREENSAVER && dreamPkg != null && !dreamPkg.equals(PKG) && !dreamPkg.equals(homePkg)) out.add(dreamPkg);
         out.addAll(Arrays.asList(DEBLOAT));
         if (Config.DISABLE_ASSISTANT) out.addAll(Arrays.asList(ASSISTANT));
         return out;
+    }
+
+    /** Free My TV's screensaver, or (screensaver=system in config.properties) the TV's own back in charge. */
+    private static void useScreensaver(Adb adb) throws IOException {
+        if (!Config.SYSTEM_SCREENSAVER) adb.shell("settings put secure screensaver_components " + DREAM);
+        else if (adb.shell("settings get secure screensaver_components").contains(DREAM)) {
+            adb.shell("settings delete secure screensaver_components");
+        }
     }
 
     /** The home screen in use now ("package/activity"): the HOME role holder, among the TV's home screens. */

@@ -39,6 +39,7 @@ number() {
 LAT="$(number latitude 40.7128)"
 LON="$(number longitude -74.0060)"
 ASSIST=false; [ "$(prop disable_assistant false)" = "true" ] && ASSIST=true
+SYSTEM_SAVER=false; [ "$(prop screensaver free)" = "system" ] && SYSTEM_SAVER=true
 
 rm -rf out && mkdir -p out/gen/io/freemytv out/classes
 cat > out/gen/io/freemytv/Config.java <<EOF
@@ -57,6 +58,7 @@ final class Config {
     static final String CURRENCY = "$(prop currency USD)";
     static final String TEMPERATURE = "$(prop temperature auto)";
     static final boolean DISABLE_ASSISTANT = $ASSIST;
+    static final boolean SYSTEM_SCREENSAVER = $SYSTEM_SAVER;
 }
 EOF
 

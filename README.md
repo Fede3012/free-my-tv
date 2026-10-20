@@ -82,6 +82,7 @@ Everything lives in `config.properties`, created by the first build:
 | `currency` | Crypto prices in `USD`, `EUR`, `BRL`, `PEN`… | `USD` |
 | `temperature` | `C`, `F` or `auto` | `auto` |
 | `disable_assistant` | Also turn off Google Assistant | `false` |
+| `screensaver` | `free` (Free My TV's) or `system` (keep the TV's own, e.g. Google Photos) | `free` |
 
 Changed something? Run `./build.sh` and install again. Keep `freemytv.keystore`: updates are signed with it.
 
