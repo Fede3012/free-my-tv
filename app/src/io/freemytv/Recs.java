@@ -57,6 +57,7 @@ final class Recs {
     private static final int MANHA = 0, TARDE = 1, NOITE = 2;
     static final String[] PERIOD_LABEL = {"PARA ESTA MANHÃ", "PARA ESTA TARDE", "PARA ESTA NOITE"};
     static final String[] PERIOD_LABEL_EN = {"THIS MORNING", "THIS AFTERNOON", "TONIGHT"};
+    static final String[] PERIOD_LABEL_ES = {"PARA ESTA MAÑANA", "PARA ESTA TARDE", "PARA ESTA NOCHE"};
     /** Service name on TMDB (part of the name, lowercase) → TV app (HomeApps key, package). */
     private static final String[][] SERVICES = {
         {"netflix", "netflix", "com.netflix.ninja"},
@@ -67,6 +68,8 @@ final class Recs {
         {"peacock", "peacock", "com.peacocktv.peacockandroid"},
         {"globoplay", "globoplay", "com.globo.globotv"},
         {"max", "max", "com.wbd.stream"},
+        {"crunchyroll", "crunchyroll", "com.crunchyroll.crunchyroid"},
+        {"directv go", "dgo", "com.directv.dtvlatam"},
         {"apple tv", "appletv", "com.apple.atve.androidtv.appletv"},
     };
     private static final Map<String, String> SERVICE_NAME = new HashMap<>();
@@ -79,6 +82,8 @@ final class Recs {
         SERVICE_NAME.put("peacock", "Peacock");
         SERVICE_NAME.put("globoplay", "Globoplay");
         SERVICE_NAME.put("max", "Max");
+        SERVICE_NAME.put("crunchyroll", "Crunchyroll");
+        SERVICE_NAME.put("dgo", "DGO");
         SERVICE_NAME.put("appletv", "Apple TV");
     }
     /** Country for "what streams where" (config.properties "tmdb_region", e.g. US, GB, BR). */
@@ -105,7 +110,7 @@ final class Recs {
     private volatile String error = "";
     private volatile boolean light;     // light design: builds only the cards (all three tabs' cards fit in memory)
     private volatile long failedAt, keyStamp;
-    private volatile boolean listEnglish;   // the saved list came in English (titles, genres and texts)
+    private volatile String listLang = "";   // language of the saved list (titles, genres and texts)
 
     private Recs(Context c) {
         context = c;
@@ -116,7 +121,7 @@ final class Recs {
             if (saved != null) picks = parse(new JSONArray(saved));
             period = cache.getInt("period", -1);
             listAt = cache.getLong("listAt", 0);
-            listEnglish = cache.getBoolean("english", false);
+            listLang = cache.getString("lang", "");
             keyStamp = cache.getLong("keyStamp", 0);
         } catch (Exception ignored) {
         }
@@ -151,7 +156,7 @@ final class Recs {
     String error() { return error; }
 
     static String periodLabel() {
-        return (Ui.en ? PERIOD_LABEL_EN : PERIOD_LABEL)[period(System.currentTimeMillis())];
+        return (Ui.en ? PERIOD_LABEL_EN : Ui.es ? PERIOD_LABEL_ES : PERIOD_LABEL)[period(System.currentTimeMillis())];
     }
 
     private static int period(long now) {
@@ -235,7 +240,7 @@ final class Recs {
         if (!newKey && failedAt != 0 && sinceFail >= 0 && sinceFail < 10 * 60_000L) return;
         int p = period(now);
         boolean stale = newKey || p != period || now - listAt > LIST_EVERY || now < listAt || picks.isEmpty()
-                || listEnglish != Ui.en;
+                || !listLang.equals(Ui.lang);
         boolean missing = false;
         for (Pick pick : wanted()) missing |= !pick.detailed || !hasImage(pick);
         if (!stale && !missing) return;
@@ -410,12 +415,12 @@ final class Recs {
         picks = list;
         period = p;
         listAt = System.currentTimeMillis();
-        listEnglish = Ui.en;
+        listLang = Ui.lang;
     }
 
     /** Language of titles and genres; the services come from the region. */
     private static String lang() {
-        return Ui.en ? "en-US" : "pt-BR";
+        return Ui.en ? "en-US" : Ui.es ? "es-MX" : "pt-BR";
     }
 
     private static void alternate(List<Pick> out, java.util.Set<String> seen, List<Pick> a, List<Pick> b, int max) {
@@ -446,15 +451,15 @@ final class Recs {
     /** Genre, runtime (or seasons) and the service it's on, among the ones the TV has. */
     private void fetchDetails(Pick p) throws Exception {
         JSONObject o = get("/" + p.kind + "/" + p.id
-                + "?language=" + lang() + "&append_to_response=watch/providers,images&include_image_language=null,pt,en");
+                + "?language=" + lang() + "&append_to_response=watch/providers,images&include_image_language=null,pt,en,es");
         String best = bestBackdrop(o.optJSONObject("images"));
         if (best != null) p.backdrop = best;
         List<String> parts = new ArrayList<>();
         JSONArray genres = o.optJSONArray("genres");
-        if (p.kind.equals("tv")) parts.add(Ui.tr("Série", "Series"));
+        if (p.kind.equals("tv")) parts.add(Ui.tr("Série", "Series", "Serie"));
         if (genres != null && genres.length() > 0) {
             String name = genres.getJSONObject(0).optString("name");
-            parts.add(Ui.en ? name : genre(name));
+            parts.add(Ui.en || Ui.es ? name : genre(name));
         }
         if (p.kind.equals("movie")) {
             int minutes = o.optInt("runtime");
@@ -635,7 +640,7 @@ final class Recs {
                         .put("detailed", p.detailed));
             }
             cache.edit().putString("picks", a.toString()).putInt("period", period).putLong("listAt", listAt)
-                    .putBoolean("english", listEnglish)
+                    .putString("lang", listLang)
                     .putLong("keyStamp", keyStamp).putInt("version", CACHE_VERSION).apply();
         } catch (Exception ignored) {
         }

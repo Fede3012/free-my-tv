@@ -23,8 +23,10 @@ final class Ui {
     private Ui() {}
 
     static final Locale PT = new Locale("pt", "BR");
-    /** English or Portuguese, from config.properties ("language") or, with "auto", the TV's own language. */
-    static volatile boolean en = english();
+    static final Locale ES = new Locale("es", "PE");
+    /** "en", "pt" or "es", from config.properties ("language") or, with "auto", the TV's own language. */
+    static volatile String lang = language();
+    static volatile boolean en = lang.equals("en"), es = lang.equals("es");
     static Typeface thin, light, displayMedium, displaySemibold, regular, medium, semibold;
     private static boolean loaded;
     private static final Rect BOUNDS = new Rect();
@@ -58,12 +60,12 @@ final class Ui {
 
     private static final String FONT = "fonts/InterVariable.ttf";
 
-    /** "en"/"pt" in config.properties, or "auto": Portuguese when the TV is set to Portuguese, English otherwise. */
-    static boolean english() {
-        String lang = Config.LANGUAGE.trim().toLowerCase(Locale.ROOT);
-        if (lang.startsWith("pt")) return false;
-        if (lang.startsWith("en")) return true;
-        return !"pt".equals(Locale.getDefault().getLanguage());
+    /** "en", "pt" or "es" in config.properties, or "auto": Portuguese or Spanish when the TV is set to them, English otherwise. */
+    static String language() {
+        String setting = Config.LANGUAGE.trim().toLowerCase(Locale.ROOT);
+        for (String l : new String[] {"en", "pt", "es"}) if (setting.startsWith(l)) return l;
+        String tv = Locale.getDefault().getLanguage();
+        return "pt".equals(tv) || "es".equals(tv) ? tv : "en";
     }
 
     private static boolean has(AssetManager a, String path) {
@@ -120,26 +122,26 @@ final class Ui {
         return Math.max(0, Math.min(1, v));
     }
 
-    static String tr(String pt, String english) {
-        return en ? english : pt;
+    static String tr(String pt, String english, String spanish) {
+        return en ? english : es ? spanish : pt;
     }
 
     /** "21:47" (in English, "9:47", like the iPhone in the US). */
     static String clock(long now) {
         return en ? new SimpleDateFormat("h:mm", Locale.US).format(new Date(now))
-                : new SimpleDateFormat("HH:mm", PT).format(new Date(now));
+                : new SimpleDateFormat("HH:mm", es ? ES : PT).format(new Date(now));
     }
 
     /** "5:21" (sunrise and sunset; in English, "5:21 AM"). */
     static String time(long at) {
         return en ? new SimpleDateFormat("h:mm a", Locale.US).format(new Date(at))
-                : new SimpleDateFormat("H:mm", PT).format(new Date(at));
+                : new SimpleDateFormat("H:mm", es ? ES : PT).format(new Date(at));
     }
 
-    /** "domingo, 18 de outubro" (lowercase, like the iPhone in Portuguese); "Sunday, October 18" in English. */
+    /** "domingo, 18 de outubro" (lowercase, like the iPhone in Portuguese; Spanish: "domingo, 18 de octubre"); "Sunday, October 18" in English. */
     static String date(long now) {
         return en ? new SimpleDateFormat("EEEE, MMMM d", Locale.US).format(new Date(now))
-                : new SimpleDateFormat("EEEE, d 'de' MMMM", PT).format(new Date(now));
+                : new SimpleDateFormat("EEEE, d 'de' MMMM", es ? ES : PT).format(new Date(now));
     }
 
     /** Spinning arc (work in progress). */

@@ -78,8 +78,8 @@ Everything lives in `config.properties`, created by the first build:
 | `tmdb_region` | Your country (two letters): which titles are on which app | `US` |
 | `latitude`, `longitude` | Your city, for the weather and the sunset | New York |
 | `city` | The name on the weather card | `Weather` |
-| `language` | `auto` (follows the TV), `en` or `pt` | `auto` |
-| `currency` | Crypto prices in `USD`, `EUR`, `BRL`… | `USD` |
+| `language` | `auto` (follows the TV), `en`, `pt` or `es` | `auto` |
+| `currency` | Crypto prices in `USD`, `EUR`, `BRL`, `PEN`… | `USD` |
 | `temperature` | `C`, `F` or `auto` | `auto` |
 | `disable_assistant` | Also turn off Google Assistant | `false` |
 

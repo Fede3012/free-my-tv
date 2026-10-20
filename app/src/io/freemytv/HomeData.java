@@ -33,7 +33,10 @@ final class HomeData {
     static final String[] COIN_NAMES = {"Bitcoin", "Ethereum", "Solana", "Dollar"};
     private static final String CURRENCY = Config.CURRENCY.trim().toUpperCase(Locale.ROOT);
     /** Binance quotes dollars as USDT. */
-    private static final String QUOTE = CURRENCY.equals("USD") ? "USDT" : CURRENCY;
+    private static final String QUOTE = CURRENCY.equals("USD") || CURRENCY.equals("PEN") ? "USDT" : CURRENCY;
+    /** Soles: Binance has no sol pairs, so the dollar prices are converted with the dollar's price in soles. */
+    private static final String SHOWN = CURRENCY.equals("PEN") ? "PEN" : QUOTE;
+    private static final String RATE_URL = "https://api.coingecko.com/api/v3/simple/price?ids=tether&vs_currencies=pen";
     private static final String WEATHER_URL = "https://api.open-meteo.com/v1/forecast?latitude=" + Config.LATITUDE
             + "&longitude=" + Config.LONGITUDE
             + "&current=temperature_2m,weather_code,is_day&daily=temperature_2m_max,temperature_2m_min,sunrise,sunset"
@@ -43,18 +46,23 @@ final class HomeData {
 
     interface Listener { void onData(); }
 
-    /** BTC, ETH and SOL; in Brazilian reais also the dollar (USDT/BRL), which Binance doesn't list for most currencies. */
+    /** BTC, ETH and SOL; in Brazilian reais and soles also the dollar, which Binance doesn't list for most currencies. */
     static int coinCount() {
+        return CURRENCY.equals("BRL") || CURRENCY.equals("PEN") ? COINS.length : 3;
+    }
+
+    /** How many coins Binance is asked for (the dollar only where it has a USDT/BRL pair). */
+    private static int binanceCount() {
         return CURRENCY.equals("BRL") ? COINS.length : 3;
     }
 
     static String coinName(int i) {
-        return i == 3 ? Ui.tr("Dólar", "Dollar") : COIN_NAMES[i];
+        return i == 3 ? Ui.tr("Dólar", "Dollar", "Dólar") : COIN_NAMES[i];
     }
 
     private static String pricesUrl() {
         StringBuilder symbols = new StringBuilder();
-        for (int i = 0; i < coinCount(); i++) symbols.append(i == 0 ? "" : ",").append("%22").append(COINS[i]).append(QUOTE).append("%22");
+        for (int i = 0; i < binanceCount(); i++) symbols.append(i == 0 ? "" : ",").append("%22").append(COINS[i]).append(QUOTE).append("%22");
         return "https://api.binance.com/api/v3/ticker/24hr?type=MINI&symbols=%5B" + symbols + "%5D";
     }
 
@@ -112,7 +120,7 @@ final class HomeData {
             fetchingPrices = true;
             io.execute(() -> {
                 try {
-                    String body = get(pricesUrl());
+                    String body = pricesBody();
                     parsePrices(body);
                     pricesAt = System.currentTimeMillis();
                     cache.edit().putString("prices", body).putLong("pricesAt", pricesAt).apply();
@@ -146,9 +154,26 @@ final class HomeData {
         main.post(() -> { for (Listener l : new ArrayList<>(listeners)) l.onData(); });
     }
 
+    /** Binance's prices; in soles, converted and with the dollar as one more entry (the cache keeps the converted body). */
+    private static String pricesBody() throws Exception {
+        String body = get(pricesUrl());
+        if (!CURRENCY.equals("PEN")) return body;
+        double rate = new JSONObject(get(RATE_URL)).getJSONObject("tether").getDouble("pen");
+        JSONArray list = new JSONArray(body), out = new JSONArray();
+        for (int i = 0; i < list.length(); i++) {
+            JSONObject o = list.getJSONObject(i);
+            String coin = o.getString("symbol").replace("USDT", "");
+            out.put(new JSONObject().put("symbol", coin + "PEN")
+                    .put("lastPrice", String.valueOf(Double.parseDouble(o.getString("lastPrice")) * rate))
+                    .put("openPrice", String.valueOf(Double.parseDouble(o.getString("openPrice")) * rate)));
+        }
+        out.put(new JSONObject().put("symbol", "USDTPEN").put("lastPrice", String.valueOf(rate)).put("openPrice", String.valueOf(rate)));
+        return out.toString();
+    }
+
     private void parsePrices(String body) throws Exception {
         JSONArray list = new JSONArray(body);
-        String quote = QUOTE;
+        String quote = SHOWN;
         int found = 0;
         for (int i = 0; i < list.length(); i++) {
             JSONObject o = list.getJSONObject(i);
@@ -236,7 +261,7 @@ final class HomeData {
     // MARK: - Formatting
 
     private static Locale locale() {
-        return Ui.en ? Locale.US : PT;
+        return Ui.en ? Locale.US : Ui.es ? Ui.ES : PT;
     }
 
     /** 580.4k · 21.0k · 1.04k · 5.61 (as short as possible; the dollar always with cents). */
@@ -278,6 +303,18 @@ final class HomeData {
             if (code >= 95) return "Thunderstorms";
             return "Rain";
         }
+        if (Ui.es) {
+            if (code == 0) return day ? "Despejado" : "Noche despejada";
+            if (code == 1) return "Pocas nubes";
+            if (code == 2) return "Parcialmente nublado";
+            if (code == 3) return "Nublado";
+            if (code == 45 || code == 48) return "Neblina";
+            if (code >= 51 && code <= 57) return "Llovizna";
+            if (code == 65 || code == 67 || code == 82) return "Lluvia fuerte";
+            if (code >= 71 && code <= 77 || code == 85 || code == 86) return "Nieve";
+            if (code >= 95) return "Tormenta";
+            return "Lluvia";
+        }
         if (code == 0) return day ? "Céu limpo" : "Noite limpa";
         if (code == 1) return "Poucas nuvens";
         if (code == 2) return "Parcialmente nublado";
@@ -294,6 +331,7 @@ final class HomeData {
         switch (CURRENCY) {
             case "USD": return "$";
             case "BRL": return "R$ ";
+            case "PEN": return "S/ ";
             case "EUR": return "€";
             case "GBP": return "£";
             case "JPY": return "¥";
@@ -322,7 +360,7 @@ final class HomeData {
 
     static String hour(long at) {
         return Ui.en ? new SimpleDateFormat("h a", Locale.US).format(new java.util.Date(at))
-                : new SimpleDateFormat("HH'h'", PT).format(new java.util.Date(at));
+                : new SimpleDateFormat("HH'h'", Ui.es ? Ui.ES : PT).format(new java.util.Date(at));
     }
 
     /** How long ago the data was fetched, if it's stale (no internet): "12 min ago". */
@@ -332,6 +370,7 @@ final class HomeData {
         if (age < every * 2) return "";
         long minutes = age / 60_000;
         if (Ui.en) return minutes < 60 ? minutes + " min ago" : (minutes / 60) + " h ago";
+        if (Ui.es) return minutes < 60 ? "hace " + minutes + " min" : "hace " + (minutes / 60) + " h";
         return minutes < 60 ? "há " + minutes + " min" : "há " + (minutes / 60) + " h";
     }
 }
