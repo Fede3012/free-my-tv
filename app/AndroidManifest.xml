@@ -90,22 +90,6 @@
             </intent-filter>
         </activity>
 
-        <!-- The remote's settings button (SystemUI sends this action). The stock home screen answers it; with that one
-             off, this panel does. -->
-        <activity
-            android:name=".PanelActivity"
-            android:process=":home"
-            android:exported="true"
-            android:label="Free My TV"
-            android:taskAffinity=""
-            android:excludeFromRecents="true"
-            android:theme="@style/FreeMyTV.Panel">
-            <intent-filter>
-                <action android:name="android.app.action.TOGGLE_NOTIFICATION_HANDLER_PANEL" />
-                <category android:name="android.intent.category.DEFAULT" />
-            </intent-filter>
-        </activity>
-
         <service
             android:name=".Screensaver"
             android:process=":home"
