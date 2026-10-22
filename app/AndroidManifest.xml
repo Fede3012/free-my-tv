@@ -90,6 +90,16 @@
             </intent-filter>
         </activity>
 
+        <!-- Opened by KeyService when the remote's settings button is pressed. -->
+        <activity
+            android:name=".PanelActivity"
+            android:process=":home"
+            android:exported="false"
+            android:label="Free My TV"
+            android:taskAffinity=""
+            android:excludeFromRecents="true"
+            android:theme="@style/FreeMyTV.Panel" />
+
         <service
             android:name=".Screensaver"
             android:process=":home"
