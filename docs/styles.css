@@ -197,6 +197,13 @@ p {
   transition: background 0.25s, color 0.25s;
 }
 
+@media (max-width: 480px) {
+  .lang {
+    min-width: 36px;
+    padding: 0 8px;
+  }
+}
+
 .lang:hover {
   background: rgba(0, 0, 0, 0.05);
   color: var(--ink);

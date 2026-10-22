@@ -362,7 +362,7 @@ public class SettingsActivity extends Activity {
             float cx = 500 * k;
             Symbols.draw(getContext(), c, "sparkles", cx, 400 * k, 150 * k, 0xEBFFFFFF);
             c.drawText("Free My TV", cx, 612 * k, title);
-            c.drawText(Ui.tr("Your TV's home screen and screensaver"), cx, 660 * k, subtitle);
+            c.drawText(Ui.tr("Início e tela de descanso da TV", "Your TV's home screen and screensaver", "Inicio y protector de pantalla de tu TV"), cx, 660 * k, subtitle);
             c.drawText(versionName(getContext()), cx, 704 * k, version);
 
             if (screen == MAIN) drawMain(c, seconds); else if (screen == HOME_CHOICE) drawChoice(c); else if (screen == PICKER) drawPicker(c); else if (screen == SHELF_EDIT) drawShelfEditor(c); else drawList(c);
@@ -370,13 +370,11 @@ public class SettingsActivity extends Activity {
 
         private void drawMain(Canvas c, float seconds) {
             boolean working = busy();
-            String busyText = busyText();
-            String mode = freeActive() ? "Free My TV" : Ui.tr("Original");
-            String[] labels = {Ui.tr("Home Screen"), Ui.tr("Screensaver"),
-                    Ui.tr("Home Settings"), Ui.tr("Shelf"),
-                    Ui.tr("Remote Buttons"), Ui.tr("TV Settings")};
-            String[] values = {working ? "" : mode, Ui.tr("Preview"), "", "", "", ""};
-            for (int i = 0; i < 6; i++) {
+            String busyText = state.optString("busy");
+            String mode = freeActive() ? "Free My TV" : Ui.tr("Original", "Original", "Original");
+            String[] labels = {Ui.tr("Início", "Home Screen", "Inicio"), Ui.tr("Tela de Descanso", "Screensaver", "Protector de pantalla"), Ui.tr("Ajustes da TV", "TV Settings", "Ajustes de la TV")};
+            String[] values = {working ? "" : mode, Ui.tr("Ver agora", "Preview", "Ver ahora"), ""};
+            for (int i = 0; i < 3; i++) {
                 float y = (LIST_TOP + i * (ROW_H + ROW_GAP)) * k;
                 rowRect.set(LIST_X * k, y, LIST_R * k, y + ROW_H * k);
                 float f = drawRowBackground(c, i);
@@ -390,7 +388,7 @@ public class SettingsActivity extends Activity {
                     Symbols.draw(getContext(), c, "chevron_right", right - cw / 2, rowRect.centerY(), 22 * k, blend(0x66FFFFFF, 0x991C1C1E, f));
                 } else if (i == 0 && working) {
                     // Switching: the current step in place of the value, with the spinning arc.
-                    String text = busyText.isEmpty() ? Ui.tr("Starting…") : busyText;
+                    String text = busyText.isEmpty() ? Ui.tr("Começando…", "Starting…", "Empezando…") : busyText;
                     rowValue.setColor(blend(0xB3FFFFFF, 0xB31C1C1E, f));
                     String shown = TextUtils.ellipsize(text, new TextPaint(rowValue), 470 * k, TextUtils.TruncateAt.END).toString();
                     c.drawText(shown, right, base, rowValue);
@@ -405,8 +403,8 @@ public class SettingsActivity extends Activity {
 
             float y = (LIST_TOP + 6 * (ROW_H + ROW_GAP) + 20) * k;
             String error = state.optString("error");
-            if (working && busyText.equals(Ui.tr("Accept “Allow USB debugging?” on the TV (tick “Always allow”)."))) {
-                c.drawText(Ui.tr("On the TV: tick “Always allow” and press OK."),
+            if (working && (busyText.contains("Permitir") || busyText.contains("Allow"))) {
+                c.drawText(Ui.tr("Na TV: marque “Sempre permitir” e aperte OK.", "On the TV: tick “Always allow” and press OK.", "En la TV: marca “Permitir siempre” y pulsa OK."),
                         LIST_X * k + 30 * k, y, warn);
                 y += 46 * k;
             } else if (!working && !error.isEmpty()) {
@@ -431,20 +429,21 @@ public class SettingsActivity extends Activity {
         /** Home screen picks: status, and the credit TMDB asks for. */
         private float drawRecs(Canvas c, float y) {
             float x = LIST_X * k + 30 * k;
-            c.drawText(Ui.tr("RECOMMENDATIONS"), x, y, header);
+            c.drawText(Ui.tr("RECOMENDAÇÕES", "RECOMMENDATIONS", "RECOMENDACIONES"), x, y, header);
             String line;
             String error = recs.optString("error");
             int count = recs.optInt("count");
-            if (!hasKey) line = Ui.tr("No TMDB key: see the README (config.properties).");
-            else if (!error.isEmpty()) line = Ui.trf("Error: {error}.", "error", error);
-            else if (count > 0) line = Ui.trf("On · {n} titles from the TV's apps, 3 new ones every hour.", "n", count);
-            else line = Ui.tr("Fetching titles…");
+            if (!hasKey) line = Ui.tr("Sem chave do TMDB: veja o README (config.properties).", "No TMDB key: see the README (config.properties).", "Sin clave de TMDB: mira el README (config.properties).");
+            else if (!error.isEmpty()) line = Ui.tr("Erro: ", "Error: ", "Error: ") + error + ".";
+            else if (count > 0) line = Ui.tr("Ligadas · " + count + " títulos nos apps da TV, 3 novos a cada hora.",
+                    "On · " + count + " titles from the TV's apps, 3 new ones every hour.",
+                    "Activadas · " + count + " títulos de las apps de la TV, 3 nuevos cada hora.");
+            else line = Ui.tr("Buscando os títulos…", "Fetching titles…", "Buscando los títulos…");
             c.drawText(TextUtils.ellipsize(line, notice, 790 * k, TextUtils.TruncateAt.END).toString(), x, y + 42 * k, notice);
             version.setTextAlign(Paint.Align.LEFT);
-            c.drawText(Ui.tr("This product uses the TMDB API but is not endorsed or certified by TMDB."), x, y + 78 * k, version);
-            if (!Config.WATCHMODE_KEY.trim().isEmpty()) {
-                c.drawText(Ui.tr("Links to the titles by Watchmode."), x, y + 108 * k, version);
-            }
+            c.drawText(Ui.tr("Usa a API do TMDB, sem endosso ou certificação do TMDB.",
+                    "This product uses the TMDB API but is not endorsed or certified by TMDB.",
+                    "Usa la API de TMDB, sin respaldo ni certificación de TMDB."), x, y + 78 * k, version);
             version.setTextAlign(Paint.Align.CENTER);
             return y + (Config.WATCHMODE_KEY.trim().isEmpty() ? 78 : 108) * k;
         }
@@ -470,7 +469,7 @@ public class SettingsActivity extends Activity {
 
         private float drawComparison(Canvas c, float y) {
             float x = LIST_X * k + 30 * k, colA = LIST_R * k - 220 * k, colB = LIST_R * k - 30 * k;
-            c.drawText(Ui.tr("COMPARISON"), x, y, header);
+            c.drawText(Ui.tr("COMPARAÇÃO", "COMPARISON", "COMPARACIÓN"), x, y, header);
             cellValue.setColor(0x73FFFFFF);
             c.drawText(Ui.tr("Original"), colA, y, cellValue);
             c.drawText("Free My TV", colB, y, cellValue);
@@ -478,8 +477,8 @@ public class SettingsActivity extends Activity {
             JSONObject metrics = state.optJSONObject("metrics");
             JSONObject a = metrics == null ? null : metrics.optJSONObject(HomeMode.ORIGINAL);
             JSONObject b = metrics == null ? null : metrics.optJSONObject(HomeMode.FREE);
-            String[][] rows = {{Ui.tr("Home button"), "homeMs"}, {Ui.tr("Free memory"), "memAvailableMB"},
-                    {Ui.tr("Home screen memory"), "homePssMB"}};
+            String[][] rows = {{Ui.tr("Botão Início", "Home button", "Botón de Inicio"), "homeMs"}, {Ui.tr("Memória livre", "Free memory", "Memoria libre"), "memAvailableMB"},
+                    {Ui.tr("Memória do Início", "Home screen memory", "Memoria del Inicio"), "homePssMB"}};
             for (int i = 0; i < rows.length; i++) {
                 float base = y + (46 + 40 * i) * k;
                 c.drawText(rows[i][0], x, base, cellLabel);
@@ -491,7 +490,7 @@ public class SettingsActivity extends Activity {
 
         private void drawNotices(Canvas c, float y) {
             float x = LIST_X * k + 30 * k;
-            c.drawText(Ui.tr("NOTICES"), x, y, header);
+            c.drawText(Ui.tr("AVISOS", "NOTICES", "AVISOS"), x, y, header);
             JSONArray notices = state.optJSONArray("notices");
             int shown = 0;
             for (int i = 0; notices != null && i < notices.length() && shown < 2; i++) {
@@ -501,15 +500,15 @@ public class SettingsActivity extends Activity {
                 c.drawText(TextUtils.ellipsize(line, notice, 790 * k, TextUtils.TruncateAt.END).toString(), x, y + (42 + 38 * shown) * k, notice);
                 shown++;
             }
-            if (shown == 0) c.drawText(Ui.tr("None yet."), x, y + 42 * k, notice);
+            if (shown == 0) c.drawText(Ui.tr("Nenhum ainda.", "None yet.", "Ninguno todavía."), x, y + 42 * k, notice);
         }
 
         /** Home screen choice: Free My TV or the original, with a check on the one in use. */
         private void drawChoice(Canvas c) {
             Paint heading = Ui.text(Ui.displaySemibold, 34 * k, 0xFFFFFFFF);
-            c.drawText(Ui.tr("Home Screen"), LIST_X * k + 30 * k, (LIST_TOP - 24) * k, heading);
-            String[][] options = {{"Free My TV", Ui.tr("No ads, with the new screensaver")},
-                    {Ui.tr("Original"), Ui.tr("The TV's factory home screen")}};
+            c.drawText(Ui.tr("Início", "Home Screen", "Inicio"), LIST_X * k + 30 * k, (LIST_TOP - 24) * k, heading);
+            String[][] options = {{"Free My TV", Ui.tr("Sem anúncios, com a tela de descanso nova", "No ads, with the new screensaver", "Sin anuncios, con el nuevo protector de pantalla")},
+                    {"Original", Ui.tr("O Início de fábrica da TV", "The TV's factory home screen", "El Inicio de fábrica de la TV")}};
             int current = freeActive() ? 0 : 1;
             for (int i = 0; i < 2; i++) {
                 float y = (LIST_TOP + 20 + i * (CHOICE_H + ROW_GAP)) * k;
@@ -525,7 +524,9 @@ public class SettingsActivity extends Activity {
                 }
             }
             Paint hint = Ui.text(Ui.regular, 23 * k, 0x8CFFFFFF);
-            c.drawText(Ui.tr("Switching takes a few seconds; the screen blinks while it measures."), LIST_X * k + 30 * k,
+            c.drawText(Ui.tr("A troca leva uns segundos e a tela pisca nas medições.",
+                    "Switching takes a few seconds; the screen blinks while it measures.",
+                    "El cambio tarda unos segundos y la pantalla parpadea al medir."), LIST_X * k + 30 * k,
                     (LIST_TOP + 20 + 2 * (CHOICE_H + ROW_GAP) + 40) * k, hint);
         }
 
@@ -539,17 +540,17 @@ public class SettingsActivity extends Activity {
         private static String metric(JSONObject m, String key) {
             if (m == null || !m.has(key)) return "—";
             long v = m.optLong(key);
-            if (key.equals("homeMs")) return Ui.trf("{n} ms", "n", v);
-            if (key.equals("memAvailableMB") && v >= 1024) return Ui.trf("{n} GB", "n", String.format(Ui.locale(), "%.2f", v / 1024.0));
-            return Ui.trf("{n} MB", "n", v);
+            if (key.equals("homeMs")) return v + " ms";
+            if (key.equals("memAvailableMB") && v >= 1024) return String.format(Ui.en ? java.util.Locale.US : Ui.es ? Ui.ES : Ui.PT, "%.2f GB", v / 1024.0);
+            return v + " MB";
         }
 
         private static String ago(long at) {
             long minutes = Math.max(0, (System.currentTimeMillis() - at) / 60_000);
-            if (minutes < 1) return Ui.tr("now");
-            if (minutes < 60) return Ui.trf("{n} min ago", "n", minutes);
-            if (minutes < 48 * 60) return Ui.trf("{n} h ago", "n", minutes / 60);
-            return Ui.plural("plural|one:{n} day ago|other:{n} days ago", minutes / 1440);
+            if (minutes < 1) return Ui.tr("agora", "now", "ahora");
+            if (minutes < 60) return Ui.tr("há " + minutes + " min", minutes + " min ago", "hace " + minutes + " min");
+            if (minutes < 48 * 60) return Ui.tr("há " + (minutes / 60) + " h", (minutes / 60) + " h ago", "hace " + (minutes / 60) + " h");
+            return Ui.tr("há " + (minutes / 1440) + " dias", (minutes / 1440) + " days ago", "hace " + (minutes / 1440) + " días");
         }
 
         private static String versionName(Context c) {

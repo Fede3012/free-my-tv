@@ -1,8 +1,8 @@
 (() => {
   const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
-  const pt = document.documentElement.lang.startsWith("pt");
+  const en = document.documentElement.lang.startsWith("en");
 
-  // The PT/EN switch is remembered, so the automatic choice in <head> doesn't undo it.
+  // The language switch is remembered, so the automatic choice in <head> doesn't undo it.
   document.querySelectorAll("[data-lang]").forEach((a) =>
     a.addEventListener("click", () => {
       try {
@@ -162,7 +162,7 @@
       sticky.style.setProperty("--sunset-faint", rgb(mix([142, 142, 147], [130, 132, 160], e)));
       const minutes = 17 * 60 + 20 + Math.round(e * 50); // 5:20 PM -> 6:10 PM
       const mm = String(minutes % 60).padStart(2, "0");
-      clock.textContent = pt ? `${Math.floor(minutes / 60)}:${mm}` : `${Math.floor(minutes / 60) - 12}:${mm} PM`;
+      clock.textContent = en ? `${Math.floor(minutes / 60) - 12}:${mm} PM` : `${Math.floor(minutes / 60)}:${mm}`;
     };
     const queue = () => {
       if (queued) return;
@@ -247,10 +247,10 @@
         sel.removeAllRanges();
         sel.addRange(range);
       }
-      b.textContent = pt ? "Copiado" : "Copied";
+      b.textContent = en ? "Copied" : "Copiado";
       b.classList.add("done");
       setTimeout(() => {
-        b.textContent = pt ? "Copiar" : "Copy";
+        b.textContent = en ? "Copy" : "Copiar";
         b.classList.remove("done");
       }, 1600);
     })

@@ -5,9 +5,10 @@ Free My TV and the TV's original home screen. A plain Android app in Java, built
 LG TVs (webOS) and Samsung TVs (Tizen) get the same home screen as a web app: `web/`, packed by `webos/` and `tizen/`
 (see below).
 The website (freemytv.io) is in `docs/`: static HTML, CSS and JS, no build step. A push to `main` that changes it
-publishes it to GitHub Pages (`.github/workflows/pages.yml`). `docs/index.html` (English) and `docs/pt/index.html`
-(Brazilian Portuguese) are the same page in two languages, so change both; visitors from Brazil land on the
-Portuguese one by themselves, and the PT/EN switch in the menu is remembered.
+publishes it to GitHub Pages (`.github/workflows/pages.yml`). `docs/index.html` (English), `docs/pt/index.html`
+(Brazilian Portuguese) and `docs/es/index.html` (Spanish) are the same page in three languages, so change all
+three; visitors from Brazil land on the Portuguese one and Spanish browsers on the Spanish one by themselves, and the
+language switch in the menu is remembered.
 
 The person you're helping may not be technical. Keep it short and friendly, say what you're about to do on their TV
 before you do it, and let them do the taps on the TV.

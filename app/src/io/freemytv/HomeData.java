@@ -40,10 +40,13 @@ final class HomeData {
     private static volatile boolean inDollars;
 
     /** Binance quotes dollars as USDT. */
-    private static String quote() {
-        return CURRENCY.equals("USD") || inDollars ? "USDT" : CURRENCY;
-    }
-    private static final String WEATHER_QUERY = "&current=temperature_2m,weather_code,is_day&daily=temperature_2m_max,temperature_2m_min,sunrise,sunset"
+    private static final String QUOTE = CURRENCY.equals("USD") || CURRENCY.equals("PEN") ? "USDT" : CURRENCY;
+    /** Soles: Binance has no sol pairs, so the dollar prices are converted with the dollar's price in soles. */
+    private static final String SHOWN = CURRENCY.equals("PEN") ? "PEN" : QUOTE;
+    private static final String RATE_URL = "https://api.coingecko.com/api/v3/simple/price?ids=tether&vs_currencies=pen";
+    private static final String WEATHER_URL = "https://api.open-meteo.com/v1/forecast?latitude=" + Config.LATITUDE
+            + "&longitude=" + Config.LONGITUDE
+            + "&current=temperature_2m,weather_code,is_day&daily=temperature_2m_max,temperature_2m_min,sunrise,sunset"
             + "&hourly=temperature_2m,weather_code,is_day&timezone=auto&forecast_days=2";
 
     private static String weatherPlace() {
@@ -56,37 +59,18 @@ final class HomeData {
     private static final long PRICES_EVERY = 5 * 60_000L, WEATHER_EVERY = 30 * 60_000L;
     interface Listener { void onData(); }
 
-    /** BTC, ETH and SOL; in Brazilian reais also the dollar (USDT/BRL), which Binance doesn't list for most currencies. */
+    /** BTC, ETH and SOL; in Brazilian reais and soles also the dollar, which Binance doesn't list for most currencies. */
     static int coinCount() {
-        return Prefs.quotes() ? active().length : 0;
+        return CURRENCY.equals("BRL") || CURRENCY.equals("PEN") ? COINS.length : 3;
     }
 
-    private static volatile int[] activeCoins;
-    private static volatile int activeVersion = -1;
-
-    /** Indexes in COINS of the coins the user has on (and that Binance lists in this currency). */
-    static int[] active() {
-        int[] a = activeCoins;
-        if (a != null && activeVersion == Prefs.version) return a;
-        int n = 0;
-        int[] tmp = new int[COINS.length];
-        for (int i = 0; i < COINS.length; i++) if (Prefs.coin(i) && (i < 3 || CURRENCY.equals("BRL"))) tmp[n++] = i;
-        a = java.util.Arrays.copyOf(tmp, n);
-        activeCoins = a;
-        activeVersion = Prefs.version;
-        return a;
-    }
-
-    /** Settings changed (city, coins): fetch again now. */
-    void settingsChanged() {
-        pricesAt = 0;
-        weatherAt = 0;
-        pricesFailedAt = 0;
-        weatherFailedAt = 0;
+    /** How many coins Binance is asked for (the dollar only where it has a USDT/BRL pair). */
+    private static int binanceCount() {
+        return CURRENCY.equals("BRL") ? COINS.length : 3;
     }
 
     static String coinName(int i) {
-        return i == 3 ? Ui.tr("Dollar") : COIN_NAMES[i];
+        return i == 3 ? Ui.tr("Dólar", "Dollar", "Dólar") : COIN_NAMES[i];
     }
 
     /** Binance.com refuses the US (HTTP 451); Binance.US answers the same call in dollars. */
@@ -94,23 +78,8 @@ final class HomeData {
 
     private static String pricesPath() {
         StringBuilder symbols = new StringBuilder();
-        int[] coins = active();
-        for (int i = 0; i < coins.length; i++) symbols.append(i == 0 ? "" : ",").append("%22").append(COINS[coins[i]]).append(quote()).append("%22");
-        return "/api/v3/ticker/24hr?type=MINI&symbols=%5B" + symbols + "%5D";
-    }
-
-    private static String getPrices() throws IOException {
-        IOException failed = null;
-        for (String host : PRICE_HOSTS) {
-            try {
-                return get(host + pricesPath());
-            } catch (IOException e) {
-                failed = e;
-                // A pair Binance doesn't list (HTTP 400) isn't a refusal: the caller falls back to dollars instead.
-                if ("HTTP 400".equals(e.getMessage())) break;
-            }
-        }
-        throw failed;
+        for (int i = 0; i < binanceCount(); i++) symbols.append(i == 0 ? "" : ",").append("%22").append(COINS[i]).append(QUOTE).append("%22");
+        return "https://api.binance.com/api/v3/ticker/24hr?type=MINI&symbols=%5B" + symbols + "%5D";
     }
 
     static final class Weather {
@@ -174,16 +143,7 @@ final class HomeData {
             fetchingPrices = true;
             io.execute(() -> {
                 try {
-                    String body;
-                    try {
-                        body = getPrices();
-                    } catch (IOException e) {
-                        if (inDollars || CURRENCY.equals("USD") || !"HTTP 400".equals(e.getMessage())) throw e;
-                        inDollars = true;
-                        cache.edit().putString("dollarsFor", CURRENCY).apply();
-                        AppLog.w("prices: Binance has no " + CURRENCY + " pairs, using dollars");
-                        body = getPrices();
-                    }
+                    String body = pricesBody();
                     parsePrices(body);
                     pricesAt = System.currentTimeMillis();
                     cache.edit().putString("prices", body).putLong("pricesAt", pricesAt).apply();
@@ -223,9 +183,26 @@ final class HomeData {
         main.post(() -> { for (Listener l : new ArrayList<>(listeners)) l.onData(); });
     }
 
+    /** Binance's prices; in soles, converted and with the dollar as one more entry (the cache keeps the converted body). */
+    private static String pricesBody() throws Exception {
+        String body = get(pricesUrl());
+        if (!CURRENCY.equals("PEN")) return body;
+        double rate = new JSONObject(get(RATE_URL)).getJSONObject("tether").getDouble("pen");
+        JSONArray list = new JSONArray(body), out = new JSONArray();
+        for (int i = 0; i < list.length(); i++) {
+            JSONObject o = list.getJSONObject(i);
+            String coin = o.getString("symbol").replace("USDT", "");
+            out.put(new JSONObject().put("symbol", coin + "PEN")
+                    .put("lastPrice", String.valueOf(Double.parseDouble(o.getString("lastPrice")) * rate))
+                    .put("openPrice", String.valueOf(Double.parseDouble(o.getString("openPrice")) * rate)));
+        }
+        out.put(new JSONObject().put("symbol", "USDTPEN").put("lastPrice", String.valueOf(rate)).put("openPrice", String.valueOf(rate)));
+        return out.toString();
+    }
+
     private void parsePrices(String body) throws Exception {
         JSONArray list = new JSONArray(body);
-        String quote = quote();
+        String quote = SHOWN;
         int found = 0;
         for (int i = 0; i < list.length(); i++) {
             JSONObject o = list.getJSONObject(i);
@@ -338,7 +315,7 @@ final class HomeData {
     // MARK: - Formatting
 
     private static Locale locale() {
-        return Ui.locale();
+        return Ui.en ? Locale.US : Ui.es ? Ui.ES : PT;
     }
 
     /** 580.4k · 21.0k · 1.04k · 5.61 (as short as possible; the dollar always with cents). */
@@ -379,27 +356,47 @@ final class HomeData {
     /** The weather in words, from Open-Meteo's WMO code. */
     static String condition(int code, boolean day) {
         if (code < 0) return "";
-        if (code == 0) return day ? Ui.tr("Clear") : Ui.tr("night|Clear");
-        if (code == 1) return day ? Ui.tr("Mostly Sunny") : Ui.tr("Mostly Clear");
-        if (code == 2) return Ui.tr("Partly Cloudy");
-        if (code == 3) return Ui.tr("Cloudy");
-        if (code == 45 || code == 48) return Ui.tr("Fog");
-        if (code >= 51 && code <= 57) return Ui.tr("Drizzle");
-        if (code == 65 || code == 67 || code == 82) return Ui.tr("Heavy Rain");
-        if (code >= 71 && code <= 77 || code == 85 || code == 86) return Ui.tr("Snow");
-        if (code >= 95) return Ui.tr("Thunderstorms");
-        return Ui.tr("Rain");
-    }
-
-    /** "H:24°  L:15°" (in Portuguese, "Máx. 24°  Mín. 15°"), with the given space between the two. */
-    static String highLow(Weather wx, String space) {
-        return Ui.trf("H:{max}", "max", degrees(wx.max)) + space + Ui.trf("L:{min}", "min", degrees(wx.min));
+        if (Ui.en) {
+            if (code == 0) return "Clear";
+            if (code == 1) return day ? "Mostly Sunny" : "Mostly Clear";
+            if (code == 2) return "Partly Cloudy";
+            if (code == 3) return "Cloudy";
+            if (code == 45 || code == 48) return "Fog";
+            if (code >= 51 && code <= 57) return "Drizzle";
+            if (code == 65 || code == 67 || code == 82) return "Heavy Rain";
+            if (code >= 71 && code <= 77 || code == 85 || code == 86) return "Snow";
+            if (code >= 95) return "Thunderstorms";
+            return "Rain";
+        }
+        if (Ui.es) {
+            if (code == 0) return day ? "Despejado" : "Noche despejada";
+            if (code == 1) return "Pocas nubes";
+            if (code == 2) return "Parcialmente nublado";
+            if (code == 3) return "Nublado";
+            if (code == 45 || code == 48) return "Neblina";
+            if (code >= 51 && code <= 57) return "Llovizna";
+            if (code == 65 || code == 67 || code == 82) return "Lluvia fuerte";
+            if (code >= 71 && code <= 77 || code == 85 || code == 86) return "Nieve";
+            if (code >= 95) return "Tormenta";
+            return "Lluvia";
+        }
+        if (code == 0) return day ? "Céu limpo" : "Noite limpa";
+        if (code == 1) return "Poucas nuvens";
+        if (code == 2) return "Parcialmente nublado";
+        if (code == 3) return "Nublado";
+        if (code == 45 || code == 48) return "Neblina";
+        if (code >= 51 && code <= 57) return "Garoa";
+        if (code == 65 || code == 67 || code == 82) return "Chuva forte";
+        if (code >= 71 && code <= 77 || code == 85 || code == 86) return "Neve";
+        if (code >= 95) return "Tempestade";
+        return "Chuva";
     }
 
     private static String currencySymbol() {
         switch (inDollars ? "USD" : CURRENCY) {
             case "USD": return "$";
             case "BRL": return "R$ ";
+            case "PEN": return "S/ ";
             case "EUR": return "€";
             case "GBP": return "£";
             case "JPY": return "¥";
@@ -432,7 +429,8 @@ final class HomeData {
     }
 
     static String hour(long at) {
-        return Ui.once("hour", at, () -> Ui.datePattern("format|h a").format(at));
+        return Ui.en ? new SimpleDateFormat("h a", Locale.US).format(new java.util.Date(at))
+                : new SimpleDateFormat("HH'h'", Ui.es ? Ui.ES : PT).format(new java.util.Date(at));
     }
 
     /** How long ago the data was fetched, if it's stale (no internet): "12 min ago". */
@@ -441,6 +439,8 @@ final class HomeData {
         long age = System.currentTimeMillis() - at;
         if (age < every * 2) return "";
         long minutes = age / 60_000;
-        return minutes < 60 ? Ui.trf("{n} min ago", "n", minutes) : Ui.trf("{n} h ago", "n", minutes / 60);
+        if (Ui.en) return minutes < 60 ? minutes + " min ago" : (minutes / 60) + " h ago";
+        if (Ui.es) return minutes < 60 ? "hace " + minutes + " min" : "hace " + (minutes / 60) + " h";
+        return minutes < 60 ? "há " + minutes + " min" : "há " + (minutes / 60) + " h";
     }
 }

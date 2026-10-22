@@ -96,8 +96,9 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
     private static final float L_PLATTER_TOP = 814, L_TILE_H = 126;
     private static final float L_DATE_BASE = 330, L_CLOCK_BASE = 540, L_WEATHER_BASE = 626, L_QUOTES_BASE = 694;
     private static final int L_INK = 0xFF1D1D1F, L_DIM = 0xFF6E6E73, L_FAINT = 0xFF8E8E93;
-    private static String[] tabs;
-    private static int tabsGeneration = -1;
+    private static final String[] TABS = {"Explorar", "Filmes", "Séries"};
+    private static final String[] TABS_EN = {"Explore", "Movies", "Shows"};
+    private static final String[] TABS_ES = {"Explorar", "Películas", "Series"};
     private static final String[] TAB_KIND = {null, "movie", "tv"};
     private static final int Z_TOP = 4, Z_CARDS = 5;
 
@@ -465,18 +466,14 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
     /** The three corner buttons, with their names in the current language. */
     private void makeLightButtons() {
         lightButtons.clear();
-        lightButtons.add(HomeApps.action(HomeApps.LIVE_TV, "live", Ui.tr("light|Live TV"), "live_tv"));
-        lightButtons.add(HomeApps.action(HomeApps.INPUTS, "inputs", Ui.tr("HDMI Inputs"), "hdmi"));
-        lightButtons.add(HomeApps.action(HomeApps.SETTINGS, "settings", Ui.tr("light|Settings"), "settings"));
+        lightButtons.add(HomeApps.action(HomeApps.LIVE_TV, "live", Ui.tr("TV aberta", "Live TV", "TV en vivo"), "live_tv"));
+        lightButtons.add(HomeApps.action(HomeApps.INPUTS, "inputs", Ui.tr("Entradas HDMI", "HDMI Inputs", "Entradas HDMI"), "hdmi"));
+        lightButtons.add(HomeApps.action(HomeApps.SETTINGS, "settings", Ui.tr("Configurações", "Settings", "Ajustes"), "settings"));
     }
 
     /** The tab names, made again only when the language changes (they are drawn on every frame). */
     private static String[] tabs() {
-        if (tabsGeneration != Ui.generation) {
-            tabs = new String[] {Ui.tr("Explore"), Ui.tr("Movies"), Ui.tr("Shows")};
-            tabsGeneration = Ui.generation;
-        }
-        return tabs;
+        return Ui.en ? TABS_EN : Ui.es ? TABS_ES : TABS;
     }
 
     @Override public void onData() {
@@ -782,7 +779,7 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         Recs.Pick p = currentPick();
         if (p == null) {
             h.clock = true;
-            h.label = Ui.date(System.currentTimeMillis()).toUpperCase(Ui.locale());
+            h.label = Ui.date(System.currentTimeMillis()).toUpperCase(Ui.en ? java.util.Locale.US : Ui.es ? Ui.ES : Ui.PT);
             return h;
         }
         h.label = Recs.periodLabel();
@@ -1505,8 +1502,8 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         hourTemp.setColor(drawerInk(0.95f));
         pricePaint.setColor(drawerInk(0.95f));
         float titleBase = ROW_TITLE * k;
-        if (drawerInputs > 0) c.drawText(Ui.tr("Inputs"), drawerRects[0].left + 4 * k, titleBase, rowTitle);
-        if (drawerInputs < drawerItems.size()) c.drawText(Ui.tr("Shortcuts"), drawerRects[drawerInputs].left + 4 * k, titleBase, rowTitle);
+        if (drawerInputs > 0) c.drawText(Ui.tr("Entradas", "Inputs", "Entradas"), drawerRects[0].left + 4 * k, titleBase, rowTitle);
+        if (drawerInputs < drawerItems.size()) c.drawText(Ui.tr("Atalhos", "Shortcuts", "Accesos directos"), drawerRects[drawerInputs].left + 4 * k, titleBase, rowTitle);
         int top = -1;
         for (int i = 0; i < drawerItems.size(); i++) if (drawerFocus[i].value > 0.02f && (top < 0 || drawerFocus[i].value > drawerFocus[top].value)) top = i;
         for (int i = 0; i < drawerItems.size(); i++) if (i != top) drawDrawerTile(c, i);
@@ -1559,10 +1556,10 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
     private void drawWeather(Canvas c, RectF r) {
         refreshDrawerText();
         float x = r.left + 34 * k;
-        c.drawText(weatherTitle, x, r.top + 54 * k, cardTitle);
-        HomeData.Weather wx = textWeather;
+        c.drawText(Config.CITY.trim().isEmpty() ? Ui.tr("Clima", "Weather", "Clima") : Config.CITY.trim(), x, r.top + 54 * k, cardTitle);
+        HomeData.Weather wx = data.weather;
         if (Double.isNaN(wx.temp)) {
-            c.drawText(Ui.tr("No weather data right now."), x, r.top + 120 * k, cardDim);
+            c.drawText(Ui.tr("Sem dados do clima agora.", "No weather data right now.", "Sin datos del clima por ahora."), x, r.top + 120 * k, cardDim);
             return;
         }
         String symbol = Symbols.weather(wx.code, wx.isDay);
@@ -1583,38 +1580,8 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
             c.drawText(hourTempText[i], hc, r.top + 196 * k, hourTemp);
         }
         float sx = hx, base = r.top + 258 * k;
-        if (wx.sunrise != 0) sx = sunItem(c, "sunrise", sunriseText, sx, base) + 36 * k;
-        if (wx.sunset != 0) sunItem(c, "sunset", sunsetText, sx, base);
-    }
-
-    private void refreshDrawerText() {
-        HomeData.Weather wx = data.weather;
-        boolean settings = Prefs.version != textPrefs || !Ui.language.equals(textLanguage);
-        textPrefs = Prefs.version;
-        textLanguage = Ui.language;
-        if (wx != textWeather || settings) {
-            textWeather = wx;
-            weatherTitle = Prefs.city().isEmpty() ? Ui.tr("Weather") : Prefs.city();
-            nowTemp = HomeData.degrees(wx.temp);
-            highLow = HomeData.highLow(wx, "   ");
-            for (int i = 0; i < wx.hours.size() && i < 6; i++) {
-                hourText[i] = HomeData.hour(wx.hours.get(i));
-                hourTempText[i] = HomeData.degrees(wx.hourTemp.get(i));
-            }
-            sunriseText = Ui.trf("Sunrise {time}", "time", Ui.time(wx.sunrise));
-            sunsetText = Ui.trf("Sunset {time}", "time", Ui.time(wx.sunset));
-        }
-        long minute = System.currentTimeMillis() / 60_000;
-        if (data.pricesAt != textPricesAt || minute != textMinute || settings) {
-            textPricesAt = data.pricesAt;
-            textMinute = minute;
-            String stale = HomeData.staleness(data.pricesAt, 5 * 60_000L);
-            staleText = stale.isEmpty() ? Ui.tr("24h change") : Ui.trf("quotes|{ago}", "ago", stale);
-            for (int i = 0; i < HomeData.COINS.length; i++) {
-                priceText[i] = HomeData.brl(data.prices[i]);
-                changeText[i] = HomeData.change(data.changes[i]);
-            }
-        }
+        if (wx.sunrise != 0) sx = sunItem(c, "sunrise", Ui.tr("Nascer ", "Sunrise ", "Amanecer ") + Ui.time(wx.sunrise), sx, base) + 36 * k;
+        if (wx.sunset != 0) sunItem(c, "sunset", Ui.tr("Pôr do sol ", "Sunset ", "Atardecer ") + Ui.time(wx.sunset), sx, base);
     }
 
     private float sunItem(Canvas c, String symbol, String label, float x, float base) {
@@ -1670,9 +1637,9 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
 
     private void drawPrices(Canvas c, RectF r) {
         float x = r.left + 34 * k, right = r.right - 34 * k;
-        refreshDrawerText();
-        c.drawText(Ui.tr("Crypto"), x, r.top + 54 * k, cardTitle);
-        c.drawText(staleText, right, r.top + 54 * k, cardDimRight);
+        c.drawText(Ui.tr("Cotações", "Crypto", "Cripto"), x, r.top + 54 * k, cardTitle);
+        String stale = HomeData.staleness(data.pricesAt, 5 * 60_000L);
+        c.drawText(stale.isEmpty() ? Ui.tr("variação em 24 h", "24h change", "variación en 24 h") : Ui.tr("de ", "", "de ") + stale, right, r.top + 54 * k, cardDimRight);
         float cap = Ui.cap(cardText);
         int[] coins = HomeData.active();
         for (int j = 0; j < coins.length; j++) {
@@ -1774,7 +1741,7 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
     private void drawSheet(Canvas c) {
         c.drawColor(0xA8000000);
         float shift = scroll.value * GRID_ROW * k;
-        c.drawText(Ui.tr("All Apps"), w / 2f, 124 * k - shift, sheetTitle);
+        c.drawText(Ui.tr("Todos os Apps", "All Apps", "Todas las apps"), w / 2f, 124 * k - shift, sheetTitle);
         int n = others.size();
         if (gridLabels == null || gridLabels.length != n) {
             gridLabels = new String[n];
@@ -2194,402 +2161,7 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         }
         boolean opened = HomeApps.open(activity, it, this, Math.round(r.left), Math.round(r.top),
                 Math.round(r.width()), Math.round(r.height()));
-        if (!opened) showToast(Ui.trf("Couldn't open {app}.", "app", it.label));
-    }
-
-    // MARK: - Moving apps on the shelf
-
-    private boolean canReorder() {
-        if (sheetOpen || zone != Z_SHELF || shelfIndex >= shelf.size() || shelf.size() < 2) return false;
-        HomeApps.Item it = shelf.get(shelfIndex);
-        return it.kind == HomeApps.APP && it.pkg != null;
-    }
-
-    private void startReorder() {
-        handler.removeCallbacks(holdStart);
-        holdArmed = false;
-        if (reordering || !canReorder()) return;
-        wake();
-        reordering = reorderAnim = okHeld = true;
-        reorderOrigin = new ArrayList<>(shelf);
-        liftIndex = shelfIndex;
-        reorderAt = SystemClock.uptimeMillis();
-        moveLift.target = 1;
-        click.open();
-        showToast(Ui.tr("← → to move · OK to drop · Back to cancel"));
-        retarget(false);    // TalkBack reads "Moving <app>, position i of n"
-    }
-
-    /** Keys while moving an app: nothing else on the home screen gets them (system keys still go to the system). */
-    private boolean reorderKey(KeyEvent e, boolean down) {
-        switch (e.getKeyCode()) {
-            case KeyEvent.KEYCODE_DPAD_LEFT:
-            case KeyEvent.KEYCODE_DPAD_RIGHT:
-                if (down) shiftReorder(e.getKeyCode() == KeyEvent.KEYCODE_DPAD_LEFT ? -1 : 1);
-                return true;
-            case KeyEvent.KEYCODE_DPAD_UP:
-            case KeyEvent.KEYCODE_DPAD_DOWN:
-                return true;
-            case KeyEvent.KEYCODE_DPAD_CENTER:
-            case KeyEvent.KEYCODE_ENTER:
-            case KeyEvent.KEYCODE_NUMPAD_ENTER:
-                // The press that lifted the app is still held: its repeats and release do nothing; a new press drops it.
-                if (down && e.getRepeatCount() == 0) {
-                    okDown = okHeld = false;
-                    dropReorder();
-                } else if (!down) {
-                    okDown = okHeld = false;
-                }
-                return true;
-            case KeyEvent.KEYCODE_BACK:
-                if (down) {
-                    if (e.getRepeatCount() == 0) backDown = true;
-                } else {
-                    if (backDown && !e.isCanceled()) {
-                        cancelReorder(false);
-                        click.move();
-                    }
-                    backDown = false;
-                }
-                return true;
-            default:
-                return false;
-        }
-    }
-
-    /** Swaps the lifted app with its neighbor; both slide from where they are to their new slots. */
-    private void shiftReorder(int dx) {
-        int i = shelfIndex, j = i + dx;
-        if (j < 0 || j >= shelf.size()) return;
-        HomeApps.Item it = shelf.get(i);
-        shelf.set(i, shelf.get(j));
-        shelf.set(j, it);
-        Spring f = tileFocus[i];
-        tileFocus[i] = tileFocus[j];
-        tileFocus[j] = f;
-        Spring s = tileSlide[i];
-        tileSlide[i] = tileSlide[j];
-        tileSlide[j] = s;
-        float d = tileRects[i].left - tileRects[j].left;
-        tileSlide[j].value += d;
-        tileSlide[i].value -= d;
-        if (tileShaders.length == shelf.size()) {
-            LinearGradient g = tileShaders[i];
-            tileShaders[i] = tileShaders[j];
-            tileShaders[j] = g;
-        }
-        shelfIndex = liftIndex = j;
-        reorderAnim = true;
-        wake();
-        retarget(false);
-        click.move();
-    }
-
-    /** OK: drops the app where it is and saves the shelf's new order. */
-    private void dropReorder() {
-        if (!reordering) return;
-        reordering = false;
-        moveLift.target = 0;
-        boolean changed = false;
-        for (int i = 0; i < shelf.size() && !changed; i++) changed = shelf.get(i) != reorderOrigin.get(i);
-        reorderOrigin = null;
-        click.open();
-        retarget(false);
-        if (!changed) return;
-        final List<String> order = new ArrayList<>();
-        for (HomeApps.Item it : shelf) order.add(it.pkg);
-        final Context c = getContext().getApplicationContext();
-        LOADER.execute(() -> {
-            // The saved list may hold more than the shelf shows (apps not installed, past the limit): the shown ones
-            // take their new order in the same slots, the others stay where they were.
-            List<String> all = HomeApps.shelfPackages(c), out = new ArrayList<>(all);
-            int next = 0;
-            for (int s = 0; s < out.size() && next < order.size(); s++) {
-                if (order.contains(out.get(s))) out.set(s, order.get(next++));
-            }
-            if (next < order.size()) {
-                out = new ArrayList<>(order);
-                for (String p : all) if (!order.contains(p)) out.add(p);
-            }
-            final List<String> save = out;
-            handler.post(() -> Prefs.setShelf(save));
-        });
-    }
-
-    /** Back, or leaving the home screen: the original order comes back (sliding, unless `snap`). */
-    private void cancelReorder(boolean snap) {
-        if (!reordering && !reorderAnim) return;
-        if (reordering) {
-            reordering = false;
-            moveLift.target = 0;
-            int n = shelf.size();
-            if (reorderOrigin != null && reorderOrigin.size() == n) {
-                HomeApps.Item lifted = shelf.get(shelfIndex);
-                Spring[] focus = new Spring[n], slide = new Spring[n];
-                LinearGradient[] shaders = tileShaders.length == n ? new LinearGradient[n] : tileShaders;
-                for (int a = 0; a < n; a++) {
-                    int b = shelf.indexOf(reorderOrigin.get(a));
-                    focus[a] = tileFocus[b];
-                    slide[a] = tileSlide[b];
-                    slide[a].value += tileRects[b].left - tileRects[a].left;
-                    if (shaders != tileShaders) shaders[a] = tileShaders[b];
-                }
-                shelf = reorderOrigin;
-                tileFocus = focus;
-                tileSlide = slide;
-                tileShaders = shaders;
-                shelfIndex = liftIndex = shelf.indexOf(lifted);
-            }
-            reorderOrigin = null;
-            retarget(snap);
-        }
-        if (snap) {
-            moveLift.snap(0);
-            for (Spring s : tileSlide) s.snap(0);
-            wiggle = 0;
-            liftIndex = -1;
-            reorderAnim = false;
-            tilesDirty = true;
-        } else {
-            wake();
-        }
-    }
-
-    /** One frame of the move: the slides, the lift and the wiggle. Returns true while any of them moves. */
-    private boolean stepReorder(float dt, long up) {
-        boolean moving = step(tileSlide, dt) | moveLift.step(dt);
-        if (reordering || moveLift.value > 0.001f) {
-            wiggle = WIGGLE_DEG * (float) Math.sin((up - reorderAt) * (2 * Math.PI / WIGGLE_MS));
-            moving = true;
-        } else {
-            wiggle = 0;
-        }
-        reorderAnim = moving;
-        return moving;
-    }
-
-    // MARK: - TalkBack: every reachable item as a virtual node (Spoken). Id = group * 1000 + index + 1.
-
-    /** The drawer's weather (0) and quotes (1) cards: read by TalkBack, never focused by the remote. */
-    private static final int GRID = 9, WIDGETS = 8;
-
-    private static int a11yId(int group, int index) {
-        return group * 1000 + index + 1;
-    }
-
-    @Override public AccessibilityNodeProvider getAccessibilityNodeProvider() {
-        return spoken;
-    }
-
-    private void a11yItems(List<Integer> out) {
-        if (sheetOpen) {
-            for (int i = 0; i < others.size(); i++) out.add(a11yId(GRID, i));
-            return;
-        }
-        for (int i = picksOn() ? 0 : 3; i < 3 + lightButtons.size(); i++) out.add(a11yId(Z_TOP, i));
-        for (int i = 0; i < Math.min(3, cards.size()); i++) out.add(a11yId(Z_CARDS, i));
-        for (int i = 0; i < shelf.size(); i++) out.add(a11yId(Z_SHELF, i));
-        for (int i = 0; i < drawerItems.size(); i++) out.add(a11yId(Z_DRAWER, i));
-        if (drawerOpen && Prefs.weather()) out.add(a11yId(WIDGETS, 0));
-        if (drawerOpen && Prefs.quotes() && HomeData.active().length > 0) out.add(a11yId(WIDGETS, 1));
-    }
-
-    private String a11yText(int id) {
-        int group = (id - 1) / 1000, i = (id - 1) % 1000;
-        switch (group) {
-            case GRID:
-                if (i >= others.size()) return "";
-                return label(others, i) + ", " + Ui.trf("{i} of {n}", "i", i + 1, "n", others.size());
-            case Z_TOP:
-                if (i >= 3) return label(lightButtons, i - 3);
-                return Ui.trf("{name}, tab {i} of {n}", "name", tabs()[i], "i", i + 1, "n", 3);
-            case Z_CARDS: return i < cards.size() ? pickText(cards.get(i)) : "";
-            case Z_SHELF:
-                if (reordering && i == shelfIndex) {
-                    return Ui.trf("Moving {app}, position {n} of {total}",
-                            "app", label(shelf, i), "n", i + 1, "total", shelf.size());
-                }
-                return label(shelf, i);
-            case Z_DRAWER: return label(drawerItems, i);
-            case WIDGETS: return i == 0 ? weatherText() : quotesText();
-            default: return "";
-        }
-    }
-
-    /**
-     * Where the item is now. Items off screen (the closed drawer, the sheet's hidden rows, the top while the drawer is
-     * open) get a thin strip at that edge, so TalkBack's arrows can still reach them; going there brings them in.
-     */
-    private boolean a11yBounds(int id, Rect out) {
-        int group = (id - 1) / 1000, i = (id - 1) % 1000;
-        float dy;
-        switch (group) {
-            case GRID: {
-                if (!sheetOpen || i >= others.size()) return false;
-                float gridWidth = COLUMNS * GRID_W + (COLUMNS - 1) * GRID_GAP;
-                float x = ((1920 - gridWidth) / 2 + (i % COLUMNS) * (GRID_W + GRID_GAP)) * k;
-                float y = (GRID_TOP + (i / COLUMNS - scroll.target) * GRID_ROW) * k;
-                a11yRect.set(x, y, x + GRID_W * k, y + GRID_H * k);
-                dy = 0;
-                break;
-            }
-            case Z_TOP:
-                if (i >= 3 + lightButtons.size()) return false;
-                a11yRect.set(topRects[i]);
-                dy = (i < 3 ? heroLayer : status).getTranslationY();
-                break;
-            case Z_CARDS:
-                if (i >= Math.min(3, cards.size())) return false;
-                a11yRect.set(cardRects[i]);
-                dy = heroLayer.getTranslationY();
-                break;
-            case Z_SHELF:
-                if (i >= tileRects.length) return false;
-                a11yRect.set(tileRects[i]);
-                dy = tiles.getTranslationY();
-                break;
-            case Z_DRAWER:
-                if (i >= drawerRects.length) return false;
-                a11yRect.set(drawerRects[i]);
-                dy = drawerOpen ? 0 : h;
-                break;
-            case WIDGETS:
-                if (!drawerOpen) return false;
-                a11yRect.set(i == 0 ? weatherCard : quotesCard);
-                dy = 0;
-                break;
-            default:
-                return false;
-        }
-        a11yRect.offset(0, dy);
-        float edge = 24 * k;
-        if (a11yRect.top >= h - edge) a11yRect.set(a11yRect.left, h - edge, a11yRect.right, h);
-        else if (a11yRect.bottom <= edge) a11yRect.set(a11yRect.left, 0, a11yRect.right, edge);
-        a11yRect.round(out);
-        return out.width() > 0 && out.height() > 0;
-    }
-
-    private int a11yFocused() {
-        if (sheetOpen) return others.isEmpty() ? -1 : a11yId(GRID, gridIndex);
-        switch (zone) {
-            case Z_TOP: return a11yId(Z_TOP, topIndex);
-            case Z_CARDS: return cardIndex < cards.size() ? a11yId(Z_CARDS, cardIndex) : -1;
-            case Z_SHELF: return shelf.isEmpty() ? -1 : a11yId(Z_SHELF, shelfIndex);
-            case Z_DRAWER: return drawerItems.isEmpty() ? -1 : a11yId(Z_DRAWER, drawerIndex);
-            case WIDGETS: return a11yId(WIDGETS, widgetIndex);
-            default: return -1;
-        }
-    }
-
-    /** The drawer's widgets that are on (0 weather, 1 quotes), with the drawer open. */
-    private List<Integer> widgets() {
-        List<Integer> out = new ArrayList<>();
-        if (!drawerOpen) return out;
-        if (Prefs.weather()) out.add(0);
-        if (Prefs.quotes() && HomeData.active().length > 0) out.add(1);
-        return out;
-    }
-
-    /** A spoken-feedback service (TalkBack) is on. */
-    private boolean talkBack() {
-        AccessibilityManager am = (AccessibilityManager) getContext().getSystemService(Context.ACCESSIBILITY_SERVICE);
-        return am != null && am.isEnabled()
-                && !am.getEnabledAccessibilityServiceList(AccessibilityServiceInfo.FEEDBACK_SPOKEN).isEmpty();
-    }
-
-    /** TalkBack moved to an item: the remote's focus goes there (opening or closing the drawer on the way). */
-    private void a11yFocus(int id) {
-        wake();
-        int group = (id - 1) / 1000, i = (id - 1) % 1000;
-        if (group == GRID) {
-            if (!sheetOpen || i >= others.size()) return;
-            gridIndex = i;
-            retargetGrid(false);
-            gridDirty = true;
-            click.move();
-            return;
-        }
-        if (sheetOpen || reordering) return;
-        switch (group) {
-            case Z_DRAWER:
-                if (i >= drawerItems.size()) return;
-                if (!drawerOpen) openDrawer();
-                drawerIndex = i;
-                break;
-            case WIDGETS:
-                if (!widgets().contains(i)) return;
-                widgetIndex = i;
-                break;
-            case Z_TOP:
-                if (i >= 3 + lightButtons.size() || (i < 3 && !picksOn())) return;
-                if (drawerOpen) closeDrawer();
-                topIndex = i;
-                if (i < 3) selectTab(i);
-                break;
-            case Z_CARDS:
-                if (i >= cards.size()) return;
-                if (drawerOpen) closeDrawer();
-                cardIndex = i;
-                break;
-            case Z_SHELF:
-                if (i >= shelf.size()) return;
-                if (drawerOpen) closeDrawer();
-                shelfIndex = i;
-                break;
-            default:
-                return;
-        }
-        zone = group;
-        retarget(false);
-        click.move();
-    }
-
-    private static String label(List<HomeApps.Item> list, int i) {
-        return i >= 0 && i < list.size() && list.get(i).label != null ? list.get(i).label : "";
-    }
-
-    /** A recommendation: title, details and the app that plays it. */
-    private static String pickText(Recs.Pick p) {
-        if (p == null) return "";
-        StringBuilder s = new StringBuilder(p.title == null ? "" : p.title);
-        if (p.meta != null && !p.meta.isEmpty()) s.append(", ").append(p.meta);
-        String app = Recs.serviceName(p);
-        if (app != null && !app.isEmpty()) s.append(". App: ").append(app);
-        return s.toString();
-    }
-
-    /** The weather card as TalkBack reads it: what it shows, in the same words and units. */
-    private String weatherText() {
-        StringBuilder s = new StringBuilder(Prefs.city().isEmpty() ? Ui.tr("Weather") : Prefs.city());
-        HomeData.Weather wx = data.weather;
-        if (Double.isNaN(wx.temp)) return s.append(". ").append(Ui.tr("No weather data right now.")).toString();
-        s.append(". ").append(HomeData.degrees(wx.temp)).append(", ").append(HomeData.condition(wx.code, wx.isDay)).append(". ")
-                .append(Ui.trf("High {max}, low {min}.", "max", HomeData.degrees(wx.max), "min", HomeData.degrees(wx.min)));
-        int hours = Math.min(6, wx.hours.size());
-        if (hours > 0) {
-            StringBuilder list = new StringBuilder();
-            for (int i = 0; i < hours; i++) {
-                if (i > 0) list.append(", ");
-                list.append(HomeData.hour(wx.hours.get(i))).append(' ').append(HomeData.degrees(wx.hourTemp.get(i)));
-            }
-            s.append(' ').append(Ui.trf("Next hours: {list}.", "list", list));
-        }
-        if (wx.sunrise != 0) s.append(' ').append(Ui.trf("talkback|Sunrise {time}", "time", Ui.time(wx.sunrise))).append('.');
-        if (wx.sunset != 0) s.append(' ').append(Ui.trf("Sunset {time}", "time", Ui.time(wx.sunset))).append('.');
-        return s.toString();
-    }
-
-    /** The quotes card as TalkBack reads it: each coin with its price and 24 h change. */
-    private String quotesText() {
-        StringBuilder s = new StringBuilder(Ui.tr("Crypto"));
-        String stale = HomeData.staleness(data.pricesAt, 5 * 60_000L);
-        s.append(", ").append(stale.isEmpty() ? Ui.tr("24h change") : Ui.trf("quotes|{ago}", "ago", stale)).append('.');
-        for (int i : HomeData.active()) {
-            s.append(' ').append(HomeData.coinName(i)).append(' ').append(HomeData.brl(data.prices[i]));
-            if (!Double.isNaN(data.changes[i])) s.append(", ").append(HomeData.change(data.changes[i]));
-            s.append('.');
-        }
-        return s.toString();
+        if (!opened) showToast(Ui.tr("Não deu para abrir ", "Couldn't open ", "No se pudo abrir ") + it.label + ".");
     }
 
     // MARK: - Light design: title, tabs, cards and icon-only buttons
@@ -2683,12 +2255,7 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
 
     private void drawLightTop(Canvas c) {
         applyTone();
-        if (!picksOn()) {
-            drawClock(c);
-            if (HomeData.coinCount() > 0) drawQuotes(c);
-            return;
-        }
-        String hello = Ui.tr("For You");
+        String hello = Ui.tr("Para você", "For You", "Para ti");
         c.drawText(hello, MARGIN * k - Ui.leftBearing(lTitle, hello), L_TITLE_BASE * k, lTitle);
         // Text tabs (the selected one in bold, in the main text color); with focus on the tabs, the selected one gets
         // the white pill with a shadow and grows a little (the tvOS focus).

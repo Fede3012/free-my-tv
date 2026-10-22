@@ -97,6 +97,16 @@
             </intent-filter>
         </activity>
 
+        <!-- Opened by KeyService when the remote's settings button is pressed. -->
+        <activity
+            android:name=".PanelActivity"
+            android:process=":home"
+            android:exported="false"
+            android:label="Free My TV"
+            android:taskAffinity=""
+            android:excludeFromRecents="true"
+            android:theme="@style/FreeMyTV.Panel" />
+
         <service
             android:name=".Screensaver"
             android:process=":home"
@@ -121,6 +131,20 @@
                 <action android:name="android.service.dreams.DreamService" />
                 <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
+        </service>
+
+        <!-- Prototype: catches the remote's settings button (KEYCODE_NOTIFICATION) while launcherx is off. -->
+        <service
+            android:name=".KeyService"
+            android:exported="true"
+            android:label="Free My TV"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/key_service" />
         </service>
 
         <!-- The switches, as background jobs in the main process. -->

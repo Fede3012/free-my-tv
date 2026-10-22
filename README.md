@@ -111,13 +111,11 @@ The first values come from `config.properties`, created by the first build (Goog
 | `watchmode_key` | Optional, free [Watchmode](https://api.watchmode.com/) key: a pick opens the title's page in its app | empty |
 | `latitude`, `longitude` | Your city, for the weather and the sunset | New York |
 | `city` | The name on the weather card | `Weather` |
-| `hide_animation` | Leave cartoons and anime out of the picks | `false` |
-| `language` | `auto` (follows the TV), or a language with a [translation](#translations) (`en`, `pt`, `es`, `de`, `ru`, `fr`, `ja`…) on Google TV; `en`, `es`, `pt`, `ru` or `de` on LG and Samsung | `auto` |
-| `show_crypto` | Show Binance crypto prices on home and screensaver | `true` |
-| `currency` | Crypto prices in `USD`, `EUR`, `BRL`… | `USD` |
+| `language` | `auto` (follows the TV), `en`, `pt` or `es` | `auto` |
+| `currency` | Crypto prices in `USD`, `EUR`, `BRL`, `PEN`… | `USD` |
 | `temperature` | `C`, `F` or `auto` | `auto` |
 | `disable_assistant` | Also turn off Google Assistant | `false` |
-| `hide_services` | Streaming services to leave out of the picks even when their app is on the TV (`netflix`, `prime`, `disney`…), comma separated; for apps the TV ships that you don't subscribe to. Google TV only | empty |
+| `screensaver` | `free` (Free My TV's) or `system` (keep the TV's own, e.g. Google Photos) | `free` |
 
 Changed something? Run `./build.sh` and install again. Keep `freemytv.keystore`: updates are signed with it.
 
@@ -138,6 +136,7 @@ To remove it for good, switch to *Original* first, then uninstall *Free My TV* (
 ## What it changes
 
 - It becomes the home screen and the screensaver.
+- The remote's settings (gear) button opens a Free My TV panel: picture, sound, Wi-Fi, Bluetooth, all settings and *Back to Original mode*. The stock home screen normally answers that button, and it's off in this mode, so a small accessibility service catches the key instead. It turns on and off with the mode, and only that one entry is touched in the TV's accessibility list.
 - It turns off, without uninstalling:
   - the stock home screen and screensaver;
   - Google TV's recovery home, Play Games and YouTube Music;
@@ -196,6 +195,10 @@ It's your code, and Claude Code finds its way around it. Try:
 | [`Prefs.java`](app/src/io/freemytv/Prefs.java) | Settings changed on the TV |
 | [`RemoteKeys.java`](app/src/io/freemytv/RemoteKeys.java) | The TCL remote's app buttons |
 | [`Watchdog.java`](app/src/io/freemytv/Watchdog.java) | The safety net |
+| [`KeyService.java`](app/src/io/freemytv/KeyService.java) | Catches the remote's settings button |
+| [`PanelActivity.java`](app/src/io/freemytv/PanelActivity.java) | The panel that button opens |
+
+How version 1 got its changes (settings button, TV's own screensaver, Spanish and soles) is written down in [`V1-NOTES.md`](V1-NOTES.md).
 | [`web/home.js`](web/home.js) | The home screen on LG TVs |
 | [`web/tv.js`](web/tv.js) | The TV's apps and inputs, on LG and Samsung |
 | [`webos/build.py`](webos/build.py), [`webos/install.py`](webos/install.py) | The LG app package and its install |
