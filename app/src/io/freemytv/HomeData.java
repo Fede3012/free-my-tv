@@ -13,7 +13,11 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.text.DecimalFormat;
+import java.text.DecimalFormatSymbols;
+import java.text.NumberFormat;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
@@ -24,7 +28,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 /**
- * Crypto prices (Binance, every 5 min) and weather/sunrise/sunset for your location (Open-Meteo, every 30 min), cached
+ * Optional crypto prices (Binance, every 5 min) and weather/sunrise/sunset (Open-Meteo, every 30 min), cached
  * so the screen opens with numbers. Only fetched while the home screen or the screensaver is visible (the screen asks).
  * Neither source needs a key. Location and currency come from config.properties.
  */
@@ -32,6 +36,9 @@ final class HomeData {
     static final String[] COINS = {"BTC", "ETH", "SOL", "USDT"};
     static final String[] COIN_NAMES = {"Bitcoin", "Ethereum", "Solana", "Dollar"};
     private static final String CURRENCY = Config.CURRENCY.trim().toUpperCase(Locale.ROOT);
+    /** Binance has no pairs in some currencies (INR...) and then refuses the whole request: prices go in dollars instead. */
+    private static volatile boolean inDollars;
+
     /** Binance quotes dollars as USDT. */
     private static final String QUOTE = CURRENCY.equals("USD") || CURRENCY.equals("PEN") ? "USDT" : CURRENCY;
     /** Soles: Binance has no sol pairs, so the dollar prices are converted with the dollar's price in soles. */
@@ -41,9 +48,15 @@ final class HomeData {
             + "&longitude=" + Config.LONGITUDE
             + "&current=temperature_2m,weather_code,is_day&daily=temperature_2m_max,temperature_2m_min,sunrise,sunset"
             + "&hourly=temperature_2m,weather_code,is_day&timezone=auto&forecast_days=2";
-    private static final long PRICES_EVERY = 5 * 60_000L, WEATHER_EVERY = 30 * 60_000L;
-    private static final Locale PT = new Locale("pt", "BR");
 
+    private static String weatherPlace() {
+        return Prefs.latitude() + "," + Prefs.longitude();
+    }
+
+    private static String weatherUrl() {
+        return "https://api.open-meteo.com/v1/forecast?latitude=" + Prefs.latitude() + "&longitude=" + Prefs.longitude() + WEATHER_QUERY;
+    }
+    private static final long PRICES_EVERY = 5 * 60_000L, WEATHER_EVERY = 30 * 60_000L;
     interface Listener { void onData(); }
 
     /** BTC, ETH and SOL; in Brazilian reais and soles also the dollar, which Binance doesn't list for most currencies. */
@@ -60,7 +73,10 @@ final class HomeData {
         return i == 3 ? Ui.tr("Dólar", "Dollar", "Dólar") : COIN_NAMES[i];
     }
 
-    private static String pricesUrl() {
+    /** Binance.com refuses the US (HTTP 451); Binance.US answers the same call in dollars. */
+    private static final String[] PRICE_HOSTS = {"https://api.binance.com", "https://api.binance.us"};
+
+    private static String pricesPath() {
         StringBuilder symbols = new StringBuilder();
         for (int i = 0; i < binanceCount(); i++) symbols.append(i == 0 ? "" : ",").append("%22").append(COINS[i]).append(QUOTE).append("%22");
         return "https://api.binance.com/api/v3/ticker/24hr?type=MINI&symbols=%5B" + symbols + "%5D";
@@ -96,16 +112,23 @@ final class HomeData {
     private final Handler main = new Handler(Looper.getMainLooper());
     private final List<Listener> listeners = new ArrayList<>();
     private volatile boolean fetchingPrices, fetchingWeather;
+    private volatile long pricesFailedAt, weatherFailedAt;
 
     private HomeData(Context c) {
         cache = c.getSharedPreferences("homedata", Context.MODE_PRIVATE);
+        inDollars = CURRENCY.equals(cache.getString("dollarsFor", ""));
         try {
-            String p = cache.getString("prices", null);
-            if (p != null) parsePrices(p);
-            pricesAt = cache.getLong("pricesAt", 0);
+            if (Prefs.quotes()) {
+                String p = cache.getString("prices", null);
+                if (p != null) parsePrices(p);
+                pricesAt = cache.getLong("pricesAt", 0);
+            }
             String w = cache.getString("weather", null);
-            if (w != null) weather = parseWeather(w);
-            weatherAt = cache.getLong("weatherAt", 0);
+            // The cached forecast is for the city it was fetched for; another city means fetch again.
+            if (w != null && weatherPlace().equals(cache.getString("weatherPlace", ""))) {
+                weather = parseWeather(w);
+                weatherAt = cache.getLong("weatherAt", 0);
+            }
         } catch (Exception ignored) {}
     }
 
@@ -116,7 +139,7 @@ final class HomeData {
     void refreshIfStale() {
         long now = System.currentTimeMillis();
         // A negative age (the TV's clock went back) counts as stale: otherwise the data would freeze.
-        if (!fetchingPrices && (now - pricesAt > PRICES_EVERY || now < pricesAt)) {
+        if (!fetchingPrices && coinCount() > 0 && (now - pricesAt > PRICES_EVERY || now < pricesAt) && !failedRecently(pricesFailedAt, now)) {
             fetchingPrices = true;
             io.execute(() -> {
                 try {
@@ -126,28 +149,34 @@ final class HomeData {
                     cache.edit().putString("prices", body).putLong("pricesAt", pricesAt).apply();
                     notifyListeners();
                 } catch (Exception e) {
+                    pricesFailedAt = System.currentTimeMillis();
                     AppLog.w("prices: " + e.getMessage());
                 } finally {
                     fetchingPrices = false;
                 }
             });
         }
-        if (!fetchingWeather && (now - weatherAt > WEATHER_EVERY || now < weatherAt)) {
+        if (!fetchingWeather && (now - weatherAt > WEATHER_EVERY || now < weatherAt) && !failedRecently(weatherFailedAt, now)) {
             fetchingWeather = true;
             io.execute(() -> {
                 try {
-                    String body = get(WEATHER_URL);
+                    String body = get(weatherUrl());
                     weather = parseWeather(body);
                     weatherAt = System.currentTimeMillis();
-                    cache.edit().putString("weather", body).putLong("weatherAt", weatherAt).apply();
+                    cache.edit().putString("weather", body).putLong("weatherAt", weatherAt).putString("weatherPlace", weatherPlace()).apply();
                     notifyListeners();
                 } catch (Exception e) {
+                    weatherFailedAt = System.currentTimeMillis();
                     AppLog.w("weather: " + e.getMessage());
                 } finally {
                     fetchingWeather = false;
                 }
             });
         }
+    }
+
+    private static boolean failedRecently(long at, long now) {
+        return at != 0 && now >= at && now - at < 2 * 60_000L;
     }
 
     private void notifyListeners() {
@@ -228,6 +257,28 @@ final class HomeData {
         return f.parse(iso).getTime();
     }
 
+    static List<String[]> findCity(String name) throws Exception {
+        String lang = Ui.language.replaceAll("-.*", "");   // Open-Meteo takes the language without the country
+        JSONObject o = new JSONObject(get("https://geocoding-api.open-meteo.com/v1/search?count=10&format=json&language=" + lang
+                + "&name=" + URLEncoder.encode(name.trim(), "UTF-8")));
+        JSONArray results = o.optJSONArray("results");
+        List<String[]> out = new ArrayList<>();
+        java.util.Set<String> seen = new java.util.HashSet<>();   // places with the same name, state and country read the same
+        for (int i = 0; results != null && i < results.length(); i++) {
+            JSONObject r = results.getJSONObject(i);
+            String city = r.optString("name", "");
+            if (city.isEmpty() || !r.has("latitude") || !r.has("longitude")) continue;
+            StringBuilder label = new StringBuilder(city);
+            for (String part : new String[] {r.optString("admin1", ""), r.optString("country", "")}) {
+                if (!part.isEmpty() && !part.equals(city)) label.append(", ").append(part);
+            }
+            if (!seen.add(label.toString())) continue;
+            out.add(new String[] {label.toString(), city,
+                    String.format(Locale.US, "%.4f", r.getDouble("latitude")), String.format(Locale.US, "%.4f", r.getDouble("longitude"))});
+        }
+        return out;
+    }
+
     private static String get(String url) throws IOException {
         HttpURLConnection c = (HttpURLConnection) new URL(url).openConnection();
         c.setConnectTimeout(6000);
@@ -252,6 +303,9 @@ final class HomeData {
      * Uses the last weather fetched (it moves ~1 min a day); without data, 6:00 and 18:00.
      */
     boolean isNight(long now) {
+        String theme = Prefs.theme();
+        if (theme.equals("dark")) return true;
+        if (theme.equals("light")) return false;
         long t = Shaders.timeOfDay(now, 0);
         long rise = Shaders.timeOfDay(weather.sunrise, 6 * 60 * 60_000L);
         long set = Shaders.timeOfDay(weather.sunset, 18 * 60 * 60_000L);
@@ -281,11 +335,22 @@ final class HomeData {
         return String.format(locale(), "%.2f", v);
     }
 
-    /** $108,234 · $185.20 · R$ 581.234 · R$ 5,61 (cents only below a thousand), in the configured currency. */
+    /**
+     * $108,234 · $185.20 · R$ 581.234 · 74 264 € (cents only below a thousand), in the configured currency, with the
+     * symbol and spaces where the language puts them.
+     */
     static String brl(double v) {
         String symbol = currencySymbol();
         if (Double.isNaN(v)) return symbol + "—";
-        return v >= 1000 ? String.format(locale(), symbol + "%,.0f", v) : String.format(locale(), symbol + "%.2f", v);
+        return Ui.once("brl", v, () -> {
+            DecimalFormat f = (DecimalFormat) NumberFormat.getCurrencyInstance(locale());
+            DecimalFormatSymbols s = f.getDecimalFormatSymbols();
+            s.setCurrencySymbol(symbol.trim());   // our symbols: ICU would write "US$" outside the US
+            f.setDecimalFormatSymbols(s);
+            f.setMinimumFractionDigits(v >= 1000 ? 0 : 2);
+            f.setMaximumFractionDigits(v >= 1000 ? 0 : 2);
+            return f.format(v);
+        });
     }
 
     /** The weather in words, from Open-Meteo's WMO code. */
@@ -328,7 +393,7 @@ final class HomeData {
     }
 
     private static String currencySymbol() {
-        switch (CURRENCY) {
+        switch (inDollars ? "USD" : CURRENCY) {
             case "USD": return "$";
             case "BRL": return "R$ ";
             case "PEN": return "S/ ";
@@ -346,16 +411,21 @@ final class HomeData {
     }
 
     private static boolean fahrenheit() {
-        String unit = Config.TEMPERATURE.trim().toUpperCase(Locale.ROOT);
-        if (unit.startsWith("F")) return true;
-        if (unit.startsWith("C")) return false;
+        String unit = Prefs.temperature();
+        if (unit.equals("F")) return true;
+        if (unit.equals("C")) return false;
         return "US".equals(Locale.getDefault().getCountry());
     }
 
-    /** "+1.2%" / "−0.8%" (a real minus sign). */
+    /** "+1.2%" / "−0.8%" (a real minus sign); "+1,2 %" in the languages that space the percent sign. */
     static String change(double v) {
         if (Double.isNaN(v)) return "";
-        return (v >= 0 ? "+" : "−") + String.format(locale(), "%.1f%%", Math.abs(v));
+        return Ui.once("change", v, () -> {
+            NumberFormat f = NumberFormat.getPercentInstance(locale());
+            f.setMinimumFractionDigits(1);
+            f.setMaximumFractionDigits(1);
+            return (v >= 0 ? "+" : "−") + f.format(Math.abs(v) / 100);
+        });
     }
 
     static String hour(long at) {

@@ -63,6 +63,7 @@ final class HomeApps {
     static final class Item {
         int kind;
         String key, label, pkg, inputId, number;
+        String uri;         // opens this address in the app instead of the app's home (a title's page)
         String symbol;      // icon for the shortcuts and special cards
         Bitmap tile;        // 16:9 card (apps and specials)
         Bitmap logo;        // colored logo with no background (shelf); null = use the card
@@ -87,15 +88,17 @@ final class HomeApps {
         {"max", "HBO Max", "com.wbd.stream", "6C3BE0", "", "1.32"},
         {"disney", "Disney+", "com.disney.disneyplus", "1838C8", "", "1"},
         {"appletv", "Apple TV", "com.apple.atve.androidtv.appletv", "B8BCC6", "", "1.1"},
+        {"appletv", "Apple TV", "com.apple.atve.sony.appletv", "B8BCC6", "", "1.1"},   // Sony's own build
         {"hulu", "Hulu", "com.hulu.livingroomplus", "1CE783", "", "1"},
         {"paramount", "Paramount+", "com.cbs.ott", "0064FF", "", "1"},
         {"peacock", "Peacock", "com.peacocktv.peacockandroid", "6E55DC", "", "1"},
         {"globoplay", "Globoplay", "com.globo.globotv", "FF5A1F", "tint", "1"},
         {"spotify", "Spotify", "com.spotify.tv.android", "1DB954", "", "1"},
     };
-    private static final int MAX_SHELF = 8;
+    static final int MAX_SHELF = 8;
     /** Live TV apps of some brands (the antenna's channels open through the standard Android request first). */
-    static final String[] LIVE_TV_APPS = {"com.tcl.tv", "com.google.android.tv", "com.mediatek.wwtv.tvcenter", "com.sony.dtv.tvx"};
+    static final String[] LIVE_TV_APPS = {"com.tcl.tv", "com.google.android.tv", "com.mediatek.wwtv.tvcenter", "com.sony.dtv.tvx",
+            "com.smartdevice.livetv", "com.mediatek.tv.oneworld.tvcenter"};
     /** Kept out of "All Apps" (only hidden, still installed). Add the ones your TV shows that you never use. */
     private static final Set<String> HIDDEN = new HashSet<>(java.util.Arrays.asList(
             "com.google.android.play.games",        // Google Play Games
@@ -104,6 +107,14 @@ final class HomeApps {
             "com.tcl.dashboard",                    // TCL Home
             "com.tcl.ocean.instructions",           // TCL: User Guide
             "com.tcl.guard",                        // TCL: Safety Guard
+            "com.homwee.factory",                   // Philco: factory menu
+            "com.mstar.android.tv.disclaimercustomization",   // Philco: disclaimer
+            "com.homwee.chtvmanager",               // Philco: TV Manager (cleaner)
+            "com.homwee.multiscreenshare",          // Philco: Midiacast (Chromecast still works)
+            "com.xiaomi.mitv.manualhelp",           // Xiaomi: user manual
+            "com.Smartdevice.emanual",              // Skyworth: user manual
+            "com.google.android.videos",            // Google Play Movies (discontinued)
+            "com.disney.starplus",                  // Star+ (merged into Disney+)
             "com.tcl.exhibit"));                    // TCL: T-Exhibition
 
     private static final Map<String, Bitmap> TILES = new HashMap<>();   // key → ready card
@@ -116,22 +127,63 @@ final class HomeApps {
     static List<Item> shelf(Context c, boolean extract) {
         List<Item> items = new ArrayList<>();
         PackageManager pm = c.getPackageManager();
-        for (String[] d : SHELF) {
+        for (String pkg : shelfPackages(c)) {
             if (items.size() >= MAX_SHELF) break;
-            if (launchIntent(pm, d[2]) == null) continue;
+            Intent launch = launchIntent(pm, pkg);
+            if (launch == null) continue;
+            ResolveInfo ri = pm.resolveActivity(launch, 0);
+            String[] d = known(pkg);
             Item it = new Item();
             it.kind = APP;
-            it.key = d[0];
-            it.label = d[1];
-            it.pkg = d[2];
-            it.tile = appTile(c, d[0], d[2], 0xFF000000 | Integer.parseInt(d[3], 16));
-            it.logo = shelfLogo(c, d[0], d[2], d[4], extract);
-            if (it.logo != null) it.logoInk = ink(it.logo);
-            it.logoDark = ownLogoCached(c, d[0] + "-dark");
-            it.logoScale = Float.parseFloat(d[5]);
+            it.pkg = pkg;
+            if (d == null) {
+                // An app picked in Settings > Shelf that isn't in SHELF: its own name and TV art.
+                it.key = pkg;
+                it.label = ri != null ? String.valueOf(ri.loadLabel(pm)) : pkg;
+                it.tile = appTile(c, null, pkg, 0);
+            } else {
+                it.key = d[0];
+                it.label = d[1];
+                it.logo = shelfLogo(c, d[0], d[2], d[4], extract);
+                if (it.logo == null) it.tile = appTile(c, d[0], d[2], 0xFF000000 | Integer.parseInt(d[3], 16));
+                if (it.logo != null) it.logoInk = ink(it.logo);
+                it.logoDark = ownLogoCached(c, d[0] + "-dark");
+                it.logoScale = Float.parseFloat(d[5]);
+            }
             items.add(it);
         }
         return items;
+    }
+
+    private static String[] known(String pkg) {
+        for (String[] d : SHELF) if (d[2].equals(pkg)) return d;
+        return null;
+    }
+
+    /** The shelf's packages in order: the user's list (Settings > Shelf), or the built-in one. */
+    static List<String> shelfPackages(Context c) {
+        List<String> custom = Prefs.shelf();
+        if (custom != null) return custom;
+        List<String> out = new ArrayList<>();
+        PackageManager pm = c.getPackageManager();
+        for (String[] d : SHELF) if (out.size() < MAX_SHELF && launchIntent(pm, d[2]) != null) out.add(d[2]);
+        return out;
+    }
+
+    /** Every app the shelf could hold, as {package, name}: the ones from SHELF first, then the other TV apps by name. */
+    static List<String[]> shelfCandidates(Context c) {
+        PackageManager pm = c.getPackageManager();
+        List<String[]> out = new ArrayList<>();
+        Set<String> seen = new HashSet<>();
+        for (String[] d : SHELF) if (launchIntent(pm, d[2]) != null && seen.add(d[2])) out.add(new String[] {d[2], d[1]});
+        List<String[]> more = new ArrayList<>();
+        for (String[] app : launchable(c)) {
+            if (app[0].equals(c.getPackageName()) || HIDDEN.contains(app[0]) || !seen.add(app[0])) continue;
+            more.add(app);
+        }
+        Collections.sort(more, (a, b) -> a[1].toLowerCase(Locale.ROOT).compareTo(b[1].toLowerCase(Locale.ROOT)));
+        out.addAll(more);
+        return out;
     }
 
     /** Live TV, the HDMI inputs with a device sending a signal, and All Apps. */
@@ -174,6 +226,12 @@ final class HomeApps {
     }
 
     /** A streaming service's app (the "Watch" button of the featured pick). */
+    static Item app(String pkg, String label, String uri) {
+        Item it = app(pkg, label);
+        it.uri = uri;
+        return it;
+    }
+
     static Item app(String pkg, String label) {
         Item it = new Item();
         it.kind = APP;
@@ -197,16 +255,25 @@ final class HomeApps {
 
     /**
      * HDMI inputs: only the ones with a device sending a signal (or all of them, with `all`). A name you gave the input
-     * in the TV's settings is used as the label.
+     * in the TV's settings is used as the label; without one, the name the device reports over HDMI-CEC ("PlayStation 5").
+     * The icon follows what that name says the device is (see deviceSymbol).
      */
     private static List<Item> inputs(Context c, boolean all) {
         List<Item> out = new ArrayList<>();
         TvInputManager tim = (TvInputManager) c.getSystemService(Context.TV_INPUT_SERVICE);
         if (tim == null) return out;
         List<TvInputInfo> list = new ArrayList<>();
+        // A device that talks HDMI-CEC gets its own input, a child of the port's, named after the device: port input id
+        // -> that name.
+        Map<String, String> devices = new HashMap<>();
         try {
             for (TvInputInfo info : tim.getTvInputList()) {
-                if (info.getType() == TvInputInfo.TYPE_HDMI && info.getParentId() == null) list.add(info);
+                if (info.getType() != TvInputInfo.TYPE_HDMI) continue;
+                if (info.getParentId() == null) {
+                    list.add(info);
+                } else {
+                    devices.put(info.getParentId(), String.valueOf(info.loadLabel(c)).trim());
+                }
             }
         } catch (RuntimeException e) {
             return out;
@@ -231,8 +298,12 @@ final class HomeApps {
                 custom = info.loadCustomLabel(c);
             } catch (RuntimeException ignored) {
             }
-            String label = custom != null && custom.length() > 0 ? custom.toString() : "HDMI " + number;
-            Item it = shortcut(INPUT, "hdmi" + number, label, "hdmi");
+            String reported = devices.containsKey(info.getId()) ? devices.get(info.getId()) : "";
+            String label = custom != null && custom.length() > 0 ? custom.toString()
+                    : !reported.isEmpty() && state == TvInputManager.INPUT_STATE_CONNECTED ? reported : "HDMI " + number;
+            String symbol = state == TvInputManager.INPUT_STATE_CONNECTED || custom != null
+                    ? deviceSymbol(label) : "hdmi";
+            Item it = shortcut(INPUT, "hdmi" + number, label, symbol);
             it.inputId = info.getId();
             it.number = String.valueOf(number);
             it.connected = state == TvInputManager.INPUT_STATE_CONNECTED;
@@ -242,29 +313,50 @@ final class HomeApps {
         return out;
     }
 
+    /** Words in a device's name, by the icon they pick: a game console, a streaming box, a sound system, a TV box. */
+    private static final String[][] DEVICE_WORDS = {
+        {"gamepad", "playstation", "ps5", "ps4", "ps3", "xbox", "nintendo", "switch", "steam deck", "console", "game"},
+        {"play", "apple tv", "chromecast", "fire tv", "firetv", "roku", "shield", "mi box", "tv box", "tvbox", "stick", "streaming", "google tv", "android tv"},
+        {"speaker", "soundbar", "sound bar", "receiver", "denon", "yamaha", "marantz", "onkyo", "bose", "sonos", "jbl", "audio", "home theater"},
+        {"tv", "cable", "set-top", "decoder", "decodificador", "tuner", "sky", "claro", "vivo"},
+    };
+
+    /** The icon for an HDMI device, from the words in its name; a name that says nothing (or a plain port) is the HDMI plug. */
+    static String deviceSymbol(String name) {
+        String n = name == null ? "" : name.toLowerCase(Locale.ROOT);
+        for (String[] group : DEVICE_WORDS) {
+            for (int i = 1; i < group.length; i++) if (n.contains(group[i])) return group[0];
+        }
+        return "hdmi";
+    }
+
     /** Installed, enabled TV apps that are not on the home screen (the TV's Settings is among them), plus our own. */
     static List<Item> others(Context c) {
         PackageManager pm = c.getPackageManager();
         Set<String> skip = new HashSet<>();
-        for (String[] d : SHELF) skip.add(d[2]);
+        // A built-in app is skipped only while it is on the shelf: one the person took off must still be listed here.
+        List<String> onShelf = shelfPackages(c);
+        for (String[] d : SHELF) if (onShelf.contains(d[2])) skip.add(d[2]);
         skip.addAll(java.util.Arrays.asList(LIVE_TV_APPS));
         skip.add(c.getPackageName());
         skip.addAll(HIDDEN);
-        Intent query = new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LEANBACK_LAUNCHER);
         List<Item> items = new ArrayList<>();
         Set<String> seen = new HashSet<>();
-        for (ResolveInfo ri : pm.queryIntentActivities(query, 0)) {
-            String pkg = ri.activityInfo.packageName;
+        for (String[] app : launchable(c)) {
+            String pkg = app[0];
             if (skip.contains(pkg) || !seen.add(pkg)) continue;
             Item it = new Item();
             it.kind = APP;
             it.pkg = pkg;
             it.key = pkg;
-            it.label = String.valueOf(ri.loadLabel(pm));
+            it.label = app[1];
             it.tile = appTile(c, null, pkg, 0);
             items.add(it);
         }
         Collections.sort(items, (a, b) -> a.label.toLowerCase(Locale.ROOT).compareTo(b.label.toLowerCase(Locale.ROOT)));
+        synchronized (HomeApps.class) {
+            TILES.keySet().removeIf(k -> k.contains(".") && !seen.contains(k));
+        }
         items.add(special(c, SETTINGS, "freemytv-settings", "Free My TV", "sparkles"));
         return items;
     }
@@ -277,11 +369,15 @@ final class HomeApps {
 
     /** Opens the item with the system zoom transition growing out of the card (the app starts opening right away). */
     static boolean open(Activity a, Item it, View from, int x, int y, int w, int h) {
-        Intent intent;
+        Intent intent, plain = null;   // plain: the app's own home, when it won't take the title's address
         switch (it.kind) {
             case APP:
                 intent = launchIntent(a.getPackageManager(), it.pkg);
-                if (intent != null) intent.addFlags(Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED);
+                plain = intent;
+                if (plain != null) plain.addFlags(Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED);
+                if (intent != null && it.uri != null) {
+                    intent = new Intent(Intent.ACTION_VIEW, android.net.Uri.parse(it.uri)).addCategory(Intent.CATEGORY_BROWSABLE).setPackage(it.pkg);
+                }
                 break;
             case LIVE_TV:
                 intent = liveTv(a);
@@ -305,21 +401,38 @@ final class HomeApps {
             return true;
         } catch (ActivityNotFoundException | SecurityException e) {
             AppLog.w("couldn't open " + it.label + ": " + e.getMessage());
-            return false;
+            if (plain == null || plain == intent) return false;
+            plain.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            try {
+                a.startActivity(plain);
+                return true;
+            } catch (ActivityNotFoundException | SecurityException e2) {
+                return false;
+            }
         }
     }
 
     /**
-     * Live TV: the antenna input's channels through the standard Android request (opening the TV app by itself may go
-     * back to the last input used, like an HDMI); otherwise a known live TV app. Null = this TV has none.
+     * Live TV: tune the antenna input directly. MediaTek TV Center otherwise restores the last source used, which can
+     * be HDMI, so its explicit activity receives the tuner URI. Other TV apps keep the standard channel-list request.
      */
     static Intent liveTv(Context c) {
         PackageManager pm = c.getPackageManager();
+        // MediaTek OneWorld TV Center (KTC/NextStar) has one input per tuner mode (antenna, cable, satellite): tuning one
+        // switches the TV to that mode and hides the other channel lists, so it opens as it is, on its own last channel.
+        Intent oneWorld = launchIntent(pm, "com.mediatek.tv.oneworld.tvcenter");
+        if (oneWorld != null) return oneWorld;
         String tuner = tunerInput(c);
+        Intent mediaTek = launchIntent(pm, "com.mediatek.wwtv.tvcenter");
+        if (mediaTek != null && tuner != null) {
+            return new Intent(Intent.ACTION_VIEW, TvContract.buildChannelUriForPassthroughInput(tuner))
+                    .setComponent(mediaTek.getComponent());
+        }
         if (tuner != null) {
             Intent channels = new Intent(Intent.ACTION_VIEW, TvContract.buildChannelsUriForInput(tuner));
             if (channels.resolveActivity(pm) != null) return channels;
         }
+        if (mediaTek != null) return mediaTek;
         for (String pkg : LIVE_TV_APPS) {
             Intent app = launchIntent(pm, pkg);
             if (app != null) return app;
@@ -348,6 +461,24 @@ final class HomeApps {
         } catch (RuntimeException ignored) {
         }
         return system != null ? system : fallback;
+    }
+
+    static List<String[]> launchable(Context c) {
+        PackageManager pm = c.getPackageManager();
+        List<String[]> out = new ArrayList<>();
+        Set<String> seen = new HashSet<>();
+        Intent tv = new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LEANBACK_LAUNCHER);
+        for (ResolveInfo ri : pm.queryIntentActivities(tv, 0)) {
+            String pkg = ri.activityInfo.packageName;
+            if (seen.add(pkg)) out.add(new String[] {pkg, String.valueOf(ri.loadLabel(pm))});
+        }
+        Intent phone = new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER);
+        for (ResolveInfo ri : pm.queryIntentActivities(phone, 0)) {
+            String pkg = ri.activityInfo.packageName;
+            if ((ri.activityInfo.applicationInfo.flags & ApplicationInfo.FLAG_SYSTEM) != 0 || !seen.add(pkg)) continue;
+            out.add(new String[] {pkg, String.valueOf(ri.loadLabel(pm))});
+        }
+        return out;
     }
 
     static Intent launchIntent(PackageManager pm, String pkg) {
@@ -398,6 +529,14 @@ final class HomeApps {
         File dir = file.getParentFile();
         //noinspection ResultOfMethodCallIgnored
         dir.mkdirs();
+        String key = file.getName().substring(0, file.getName().lastIndexOf('-', file.getName().lastIndexOf("-v") - 1));
+        File[] old = dir.listFiles((d, name) -> name.matches(java.util.regex.Pattern.quote(key) + "-\\d+-v\\d+\\.png(\\.none)?"));
+        if (old != null) {
+            for (File f : old) {
+                //noinspection ResultOfMethodCallIgnored
+                f.delete();
+            }
+        }
         try (FileOutputStream out = new FileOutputStream(logo != null ? file : none)) {
             if (logo != null) logo.compress(Bitmap.CompressFormat.PNG, 100, out);
         } catch (IOException e) {

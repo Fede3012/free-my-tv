@@ -7,12 +7,25 @@ import android.graphics.Paint;
 import android.graphics.Rect;
 import android.graphics.RectF;
 import android.graphics.Typeface;
+import android.icu.text.PluralRules;
+import android.os.Build;
+
+import org.json.JSONObject;
 
 import java.io.IOException;
+import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.text.SimpleDateFormat;
 import java.util.Date;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Supplier;
 
 /**
  * Fonts and text for the home screen, the screensaver and the settings. Font: Inter (variable, assets/fonts, SIL OFL),
@@ -55,7 +68,16 @@ final class Ui {
             } catch (RuntimeException ignored) {
             }
         }
-        return Typeface.create(Typeface.DEFAULT, weight, false);
+        // Typeface.create(family, weight, italic) is Android 9+; Android 8 only has regular and bold.
+        if (Build.VERSION.SDK_INT >= 28) return Weighted.create(weight);
+        return Typeface.create(Typeface.DEFAULT, weight >= 600 ? Typeface.BOLD : Typeface.NORMAL);
+    }
+
+    /** Only this class touches the Android 9 call, so Ui itself still verifies on Android 8 (like Recording.Node). */
+    private static final class Weighted {
+        static Typeface create(int weight) {
+            return Typeface.create(Typeface.DEFAULT, weight, false);
+        }
     }
 
     private static final String FONT = "fonts/InterVariable.ttf";
