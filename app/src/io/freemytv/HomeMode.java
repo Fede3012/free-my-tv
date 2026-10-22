@@ -37,6 +37,7 @@ final class HomeMode {
     static final String HOME_ACTIVITY = PKG + "/" + PKG + ".HomeActivity";
     static final String SETTINGS_ACTIVITY = PKG + "/" + PKG + ".SettingsActivity";
     static final String DREAM = PKG + "/" + PKG + ".Screensaver";
+    static final String KEY_SERVICE = PKG + "/" + PKG + ".KeyService";
     static final String FREE = "free", ORIGINAL = "original";
 
     /** Google TV's home screen: the fallback when the TV's own one wasn't recorded. */
@@ -130,6 +131,7 @@ final class HomeMode {
             check(adb.shell("cmd package set-home-activity " + HOME_ACTIVITY), "Success",
                     Ui.tr("o Android não aceitou o novo Início", "Android didn't accept the new home screen", "Android no aceptó el nuevo Inicio"));
             useScreensaver(adb);
+            keyService(adb, true);
             List<String> targets = targets(home, dream);
             Set<String> disabled = new HashSet<>(stringList(state(c), "disabled"));
             Set<String> present = packages(adb, "");
@@ -188,6 +190,7 @@ final class HomeMode {
             busy(c, Ui.tr("Devolvendo o Início original…", "Restoring the original home screen…", "Restaurando el Inicio original…"));
             boolean homeOk = restoreHome(adb, home);
             adb.shell("settings delete secure screensaver_components");
+            keyService(adb, false);
             s = state(c);
             s.put("mode", ORIGINAL).put("since", System.currentTimeMillis()).put("homeReverted", false)
                     .put("disabled", new JSONArray(failed));
@@ -231,6 +234,7 @@ final class HomeMode {
                 String home = originalHome(s);
                 adb.shell("pm enable " + GOOGLE_SETUP);
                 restoreHome(adb, home);
+                keyService(adb, false);
                 String homePkg = packageOf(home);
                 JSONArray kept = new JSONArray();
                 for (String pkg : stringList(s, "disabled")) {
@@ -293,6 +297,9 @@ final class HomeMode {
                     useScreensaver(adb);
                     fixed.add(Ui.tr("a tela de descanso", "the screensaver", "el protector de pantalla"));
                 }
+                if (!reverted && keyService(adb, true)) {
+                    fixed.add(Ui.tr("o botão de configurações do controle", "the remote's settings button", "el botón de ajustes del control"));
+                }
                 JSONObject latest = state(app);
                 latest.put("disabled", new JSONArray(sorted(disabled)));
                 save(app, latest);
@@ -328,6 +335,34 @@ final class HomeMode {
         else if (adb.shell("settings get secure screensaver_components").contains(DREAM)) {
             adb.shell("settings delete secure screensaver_components");
         }
+    }
+
+    /**
+     * The remote's settings button is answered by the stock home screen, which Free My TV mode turns off; our
+     * accessibility service takes the key instead. Adds it to the services already on (or removes only it) and says
+     * whether anything changed.
+     */
+    private static boolean keyService(Adb adb, boolean on) throws IOException {
+        String now = adb.shell("settings get secure enabled_accessibility_services").trim();
+        List<String> others = new ArrayList<>();
+        boolean was = false;
+        for (String service : now.equals("null") ? new String[0] : now.split(":")) {
+            if (service.isEmpty()) continue;
+            if (service.equals(KEY_SERVICE) || service.equals(PKG + "/.KeyService")) was = true;
+            else others.add(service);
+        }
+        if (was == on) return false;
+        if (on) {
+            others.add(KEY_SERVICE);
+            adb.shell("settings put secure enabled_accessibility_services " + String.join(":", others));
+            adb.shell("settings put secure accessibility_enabled 1");
+        } else if (others.isEmpty()) {
+            adb.shell("settings delete secure enabled_accessibility_services");
+            adb.shell("settings put secure accessibility_enabled 0");
+        } else {
+            adb.shell("settings put secure enabled_accessibility_services " + String.join(":", others));
+        }
+        return true;
     }
 
     /** The home screen in use now ("package/activity"): the HOME role holder, among the TV's home screens. */
