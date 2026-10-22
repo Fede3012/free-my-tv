@@ -99,6 +99,7 @@ To remove it for good, switch to *Original* first, then uninstall *Free My TV* (
 ## What it changes
 
 - It becomes the home screen and the screensaver.
+- The remote's settings (gear) button opens a Free My TV panel: picture, sound, Wi-Fi, Bluetooth, all settings and *Back to Original mode*. The stock home screen normally answers that button, and it's off in this mode, so a small accessibility service catches the key instead. It turns on and off with the mode, and only that one entry is touched in the TV's accessibility list.
 - It turns off, without uninstalling:
   - the stock home screen and screensaver, with the remote shortcuts they run on some TVs (like the Netflix button on TCL);
   - Google TV's recovery home, Play Games and YouTube Music;
@@ -149,6 +150,10 @@ It's your code, and Claude Code finds its way around it. Try:
 | [`DreamView.java`](app/src/io/freemytv/DreamView.java) | The screensaver |
 | [`SettingsActivity.java`](app/src/io/freemytv/SettingsActivity.java) | The settings screen (the app's icon) |
 | [`Watchdog.java`](app/src/io/freemytv/Watchdog.java) | The safety net |
+| [`KeyService.java`](app/src/io/freemytv/KeyService.java) | Catches the remote's settings button |
+| [`PanelActivity.java`](app/src/io/freemytv/PanelActivity.java) | The panel that button opens |
+
+How version 1 got its changes (settings button, TV's own screensaver, Spanish and soles) is written down in [`V1-NOTES.md`](V1-NOTES.md).
 
 The website ([freemytv.io](https://freemytv.io)) is in [`docs/`](docs): plain HTML, CSS and JS on GitHub Pages.
 
