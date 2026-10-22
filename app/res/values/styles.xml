@@ -10,5 +10,9 @@
         <item name="android:colorBackgroundCacheHint">@null</item>
     </style>
 
-    <style name="FreeMyTV.Panel" parent="@android:style/Theme.DeviceDefault.Dialog.NoActionBar" />
+    <style name="FreeMyTV.Panel" parent="@android:style/Theme.DeviceDefault.NoActionBar">
+        <item name="android:windowIsTranslucent">true</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:windowAnimationStyle">@null</item>
+    </style>
 </resources>
