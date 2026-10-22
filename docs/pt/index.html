@@ -4,11 +4,12 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <script>
-    // Portuguese page: back to English only if the visitor picked it with the PT/EN switch.
+    // Portuguese page: on to another language only if the visitor picked it with the language switch.
     (function () {
       var lang;
       try { lang = localStorage.getItem("lang"); } catch (e) {}
       if (lang === "en") location.replace("../" + location.search + location.hash);
+      else if (lang === "es") location.replace("../es/" + location.search + location.hash);
     })();
   </script>
   <title>Free My TV — uma tela inicial rápida e sem anúncios para a Google TV</title>
@@ -16,11 +17,13 @@
   <link rel="canonical" href="https://freemytv.io/pt/">
   <link rel="alternate" hreflang="en" href="https://freemytv.io/">
   <link rel="alternate" hreflang="pt-BR" href="https://freemytv.io/pt/">
+  <link rel="alternate" hreflang="es" href="https://freemytv.io/es/">
   <link rel="alternate" hreflang="x-default" href="https://freemytv.io/">
   <meta name="theme-color" content="#F5F5F7">
   <meta property="og:type" content="website">
   <meta property="og:locale" content="pt_BR">
   <meta property="og:locale:alternate" content="en_US">
+  <meta property="og:locale:alternate" content="es_LA">
   <meta property="og:url" content="https://freemytv.io/pt/">
   <meta property="og:title" content="Free My TV">
   <meta property="og:description" content="Uma tela inicial rápida e sem anúncios para a Google TV. Código aberto. Um botão para desfazer.">
@@ -52,6 +55,7 @@
     </nav>
     <div class="nav-end">
       <a class="lang" href="../" hreflang="en" lang="en" data-lang="en" aria-label="Read in English">EN</a>
+      <a class="lang" href="../es/" hreflang="es" lang="es" data-lang="es" aria-label="Leer en español">ES</a>
       <a class="btn btn-dark btn-sm" href="https://github.com/simbasjungles/free-my-tv" rel="noopener">
       <svg class="gh" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
       <span>GitHub</span>
@@ -271,7 +275,7 @@
         <details><summary>O que é desligado?</summary><p>A tela inicial e o protetor de tela de fábrica (substituídos), a tela de recuperação do Google TV, Play Games e YouTube Music e, nas TVs TCL, o TCL Channel, as mensagens, a demonstração de loja, o menu de hotel, os manuais e os apps de espelhamento e de registros. O Google Assistente só se você pedir no config.</p></details>
         <details><summary>O que faz o botão de configurações do controle?</summary><p>Ele abre um painel do Free My TV na lateral direita: imagem, som, Wi-Fi, Bluetooth, todas as configurações e um atalho para voltar ao original. Normalmente quem responde a esse botão é a tela inicial de fábrica, que fica desligada neste modo, então um pequeno serviço de acessibilidade pega a tecla no lugar. Ele liga e desliga junto com o modo.</p></details>
         <details><summary>Dá para deixar do meu jeito?</summary><p>Essa é a ideia. Abra a pasta no Claude Code e é só pedir: "coloque o Crunchyroll na prateleira", "mostre as cotações em reais", "configure para a minha Sony". Ele muda o código, compila o app e coloca na sua TV.</p></details>
-        <details><summary>Fica em português?</summary><p>Fica. O app segue o idioma da TV, em português ou inglês. Quer outro idioma? Peça ao Claude.</p></details>
+        <details><summary>Fica em português?</summary><p>Fica. O app segue o idioma da TV, em português, inglês ou espanhol. Quer outro idioma? Peça ao Claude.</p></details>
         <details><summary>Ele coleta algum dado?</summary><p>Não. Sem contas, sem análises, sem rastreamento. Ele só fala com o TMDB (destaques), o Open-Meteo (clima, com as coordenadas que você definir) e a Binance (cotações).</p></details>
         <details><summary>É grátis?</summary><p>Sim. Licença MIT, e a chave do TMDB também é grátis.</p></details>
       </div>
